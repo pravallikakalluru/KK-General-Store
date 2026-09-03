@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/product.dart';
 import '../utils/formatters.dart';
+import 'product_image.dart';
 
 /// Product grid tile, Blinkit-style: a square product image with a floating
 /// quantity control overlapping its bottom-right corner, then unit, name
@@ -35,92 +35,141 @@ class ProductCard extends StatelessWidget {
 
     return Opacity(
       opacity: isAvailable ? 1.0 : 0.55,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.divider),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            // The whole card is now one elevated white surface (image + text
+            // together) instead of just a bordered box around the image with
+            // text floating directly on the page background - the soft
+            // shadow is what gives the grid the "lifted card" depth typical
+            // of Blinkit/Zepto/Instamart rather than a flat list of images.
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.07),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Expanded (not a fixed square AspectRatio) so this image area
+                // always exactly fills whatever vertical space is left over in
+                // the card after the text block below, whatever that turns out
+                // to be for the current column width. A fixed AspectRatio tied
+                // to the card's width, combined with a single fixed
+                // childAspectRatio on the surrounding GridView, only balances at
+                // one specific column width — at any narrower width (which the
+                // responsive grid produces often) the text needed more room than
+                // was budgeted, the Column overflowed, and the image got clipped
+                // at its bottom edge. Expanded makes overflow structurally
+                // impossible regardless of column width or text length.
+                Expanded(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
+                          child: ProductImage(
+                            imageUrl: imageUrl,
+                            fill: true,
+                          ),
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: imageUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: AppColors.divider,
-                                  child: const Center(
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => _placeholder(),
-                              )
-                            : _placeholder(),
                       ),
+                      if (!isAvailable)
+                        Positioned(
+                          top: 5,
+                          left: 5,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: const Text(
+                              'Out of stock',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      if (isAvailable)
+                        Positioned(
+                          right: -4,
+                          bottom: -14,
+                          child: _buildQuantityControl(context),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '/ ${product.unit}',
+                  style: const TextStyle(
+                      fontSize: 10.5, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 2),
+                // Fixed-height reservations (not just maxLines) for the name and
+                // Telugu-name rows - a name that only needs 1 line, or a product
+                // with no Telugu name at all, would otherwise leave less text
+                // below the image than a 2-line name / with-Telugu-name product
+                // in the same grid row. Since the image area above is Expanded
+                // (fills whatever's left in the card), that variable leftover
+                // text height meant the image box's actual height - and so its
+                // bottom edge - shifted card to card instead of lining up.
+                // Reserving the same space regardless of actual content keeps
+                // every card's image box exactly the same size.
+                SizedBox(
+                  height: 30, // 2 lines at fontSize 12.5 * height 1.2
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12.5,
+                          height: 1.2),
                     ),
                   ),
-                  if (!isAvailable)
-                    Positioned(
-                      top: 5,
-                      left: 5,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.error,
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: const Text(
-                          'Out of stock',
-                          style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  if (isAvailable)
-                    Positioned(
-                      right: -4,
-                      bottom: -14,
-                      child: _buildQuantityControl(context),
-                    ),
-                ],
-              ),
+                ),
+                SizedBox(
+                  height: 14,
+                  child: (product.nameTe != null && product.nameTe!.isNotEmpty)
+                      ? Text(
+                          product.nameTe!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 10.5, color: AppColors.textSecondary),
+                        )
+                      : null,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  Formatters.currency(product.price),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: AppColors.primary),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              '/ ${product.unit}',
-              style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              product.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, height: 1.2),
-            ),
-            if (product.nameTe != null && product.nameTe!.isNotEmpty)
-              Text(
-                product.nameTe!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
-              ),
-            const SizedBox(height: 3),
-            Text(
-              Formatters.currency(product.price),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -140,7 +189,10 @@ class ProductCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.primary),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 3, offset: const Offset(0, 1)),
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1)),
             ],
           ),
           child: const Icon(Icons.add, color: AppColors.primary, size: 18),
@@ -154,7 +206,10 @@ class ProductCard extends StatelessWidget {
         color: AppColors.primary,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 3, offset: const Offset(0, 1)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 3,
+              offset: const Offset(0, 1)),
         ],
       ),
       child: Row(
@@ -166,7 +221,10 @@ class ProductCard extends StatelessWidget {
             child: Text(
               '$cartQuantity',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12),
             ),
           ),
           _stepperButton(Icons.add, onIncrement),
@@ -181,15 +239,6 @@ class ProductCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
         child: Icon(icon, color: Colors.white, size: 13),
-      ),
-    );
-  }
-
-  Widget _placeholder() {
-    return Container(
-      color: AppColors.divider,
-      child: const Center(
-        child: Icon(Icons.shopping_basket_outlined, size: 28, color: AppColors.textSecondary),
       ),
     );
   }

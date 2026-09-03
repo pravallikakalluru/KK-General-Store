@@ -10,12 +10,6 @@ import '../models/order.dart';
 /// "download receipt" action and the owner's "print receipt" action, so
 /// the layout only lives in one place (per the architecture requirement).
 class ReceiptPdfService {
-  static final NumberFormat _currencyFormat = NumberFormat.currency(
-    locale: 'en_IN',
-    symbol: '₹',
-    decimalDigits: 2,
-  );
-
   static final DateFormat _dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
 
   /// Builds the receipt PDF document for [order]. [storeName] and
@@ -55,11 +49,6 @@ class ReceiptPdfService {
               _buildOrderMeta(order),
               pw.SizedBox(height: 16),
               _buildItemsTable(order),
-              pw.SizedBox(height: 16),
-              pw.Align(
-                alignment: pw.Alignment.centerRight,
-                child: _buildTotals(order),
-              ),
               if (order.notes != null && order.notes!.trim().isNotEmpty) ...[
                 pw.SizedBox(height: 20),
                 pw.Text(
@@ -162,16 +151,20 @@ class ReceiptPdfService {
   }
 
   static pw.Widget _buildItemsTable(Order order) {
-    final headers = ['#', 'Item', 'Price', 'Qty', 'Total'];
+    // No pricing on this receipt by design (it's a packing/fulfillment
+    // list, not a bill) — "Total" is the actual quantity ordered
+    // (Qty × Measurement, e.g. 2 x 100 g = 200 g), not a money amount, so
+    // there's nothing meaningful to sum across rows either.
+    final headers = ['#', 'Item', 'Qty', 'Measurement', 'Total'];
     final rows = <List<String>>[];
     for (var i = 0; i < order.items.length; i++) {
       final item = order.items[i];
       rows.add([
         '${i + 1}',
         item.productName,
-        _currencyFormat.format(item.productPrice),
         '${item.quantity}',
-        _currencyFormat.format(item.lineTotal),
+        _formatUnit(item.unit),
+        _computeTotalQuantity(item.unit, item.quantity),
       ]);
     }
 
@@ -188,15 +181,15 @@ class ReceiptPdfService {
       cellAlignments: {
         0: pw.Alignment.centerLeft,
         1: pw.Alignment.centerLeft,
-        2: pw.Alignment.centerRight,
+        2: pw.Alignment.center,
         3: pw.Alignment.center,
         4: pw.Alignment.centerRight,
       },
       columnWidths: {
         0: const pw.FlexColumnWidth(0.6),
         1: const pw.FlexColumnWidth(3),
-        2: const pw.FlexColumnWidth(1.4),
-        3: const pw.FlexColumnWidth(1),
+        2: const pw.FlexColumnWidth(1),
+        3: const pw.FlexColumnWidth(1.6),
         4: const pw.FlexColumnWidth(1.6),
       },
       cellPadding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
@@ -209,38 +202,50 @@ class ReceiptPdfService {
     );
   }
 
-  static pw.Widget _buildTotals(Order order) {
-    return pw.Container(
-      width: 220,
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          _totalRow('Subtotal', _currencyFormat.format(order.subtotal)),
-          pw.SizedBox(height: 4),
-          pw.Divider(),
-          _totalRow(
-            'Total',
-            _currencyFormat.format(order.totalAmount),
-            emphasize: true,
-          ),
-        ],
-      ),
-    );
+  /// "kg" -> "Kg", "litre" -> "Litre", "g" -> "Grams", "pc" -> "Pc", etc.
+  static String _formatUnit(String unit) {
+    switch (unit.toLowerCase()) {
+      case 'g':
+        return 'Grams';
+      case 'kg':
+        return 'Kg';
+      case 'litre':
+      case 'l':
+        return 'Litre';
+      case 'ml':
+        return 'ml';
+      case 'dozen':
+        return 'Dozen';
+      case 'pack':
+        return 'Packet';
+      case 'box':
+        return 'Box';
+      case 'pc':
+        return 'Pc';
+      default:
+        return unit.isEmpty ? '-' : unit[0].toUpperCase() + unit.substring(1);
+    }
   }
 
-  static pw.Widget _totalRow(String label, String value,
-      {bool emphasize = false}) {
-    final style = pw.TextStyle(
-      fontSize: emphasize ? 13 : 11,
-      fontWeight: emphasize ? pw.FontWeight.bold : pw.FontWeight.normal,
-    );
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Text(label, style: style),
-        pw.Text(value, style: style),
-      ],
-    );
+  /// Computes the actual quantity ordered for one line: Qty × Measurement.
+  /// If [unit] starts with a number (e.g. "100 g", "50 g", "1 piece"), that
+  /// number is the pack size and gets multiplied by [quantity] (2 x "100 g"
+  /// -> "200 g"). Otherwise [unit] is a plain measurement type (e.g. "kg",
+  /// "litre") and [quantity] already IS the count of it (2 x "kg" -> "2 kg").
+  static String _computeTotalQuantity(String unit, int quantity) {
+    final trimmed = unit.trim();
+    final match = RegExp(r'^(\d+(?:\.\d+)?)\s*(.+)$').firstMatch(trimmed);
+    if (match != null) {
+      final baseAmount = double.tryParse(match.group(1)!);
+      final suffix = match.group(2)!.trim();
+      if (baseAmount != null && suffix.isNotEmpty) {
+        final total = baseAmount * quantity;
+        final totalStr =
+            total == total.roundToDouble() ? total.toInt().toString() : total.toStringAsFixed(2);
+        return '$totalStr $suffix';
+      }
+    }
+    return '$quantity $trimmed';
   }
 
   /// Owner action: sends the receipt straight to Android's print dialog.

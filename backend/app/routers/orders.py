@@ -49,7 +49,9 @@ def _build_whatsapp_message(order: Order) -> str:
         "Items:",
     ]
     for index, item in enumerate(order.items, start=1):
-        lines.append(f"{index}. {item.product_name} x{item.quantity} = Rs.{item.line_total}")
+        lines.append(
+            f"{index}. {item.product_name} ({item.unit}) x{item.quantity} = Rs.{item.line_total}"
+        )
 
     lines += ["", f"Subtotal: Rs.{order.subtotal}", f"Total: Rs.{order.total_amount}"]
 
@@ -87,6 +89,7 @@ def create_order(
                 product_id=product.id,
                 product_name=product.name,
                 product_price=product.price,
+                unit=product.unit,
                 quantity=requested.quantity,
                 line_total=line_total,
             )

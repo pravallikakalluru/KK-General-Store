@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/api_config.dart';
 import '../../config/theme.dart';
+import '../../models/category.dart';
 import '../../models/product.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/product_provider.dart';
@@ -13,7 +14,20 @@ import '../../utils/error_handler.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/primary_button.dart';
 
-const List<String> _kUnits = ['pc', 'kg', 'g', 'litre', 'ml', 'pack', 'dozen', 'box'];
+const List<String> _kUnits = ['pc', 'kg', 'g', 'litre', 'ml', 'pack', 'dozen', 'box', '100 g', '50 g', '1 piece'];
+
+/// Default selling quantity/weight, automatically applied by category —
+/// mirrors backend/seed.py's CATALOG comment. New products in one of these
+/// categories get their Unit field pre-filled; the owner can still edit it.
+const Map<String, String> _categoryDefaultUnit = {
+  'Leafy Vegetables': '50 g',
+  'Vegetables': '100 g',
+  'Root Vegetables': '100 g',
+  'Gourds': '100 g',
+  'Mushrooms': '100 g',
+  'Fruits': '100 g',
+  'Coconut': '1 piece',
+};
 
 /// Create/edit form for a product, including gallery/camera image upload
 /// via image_picker, sent as multipart/form-data per API_CONTRACT.md.
@@ -32,10 +46,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   late final TextEditingController _nameTeController;
   late final TextEditingController _priceController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _unitController;
   final _picker = ImagePicker();
 
   int? _categoryId;
-  String _unit = 'pc';
+  // Tracks whether the current Unit value was auto-filled by us (rather
+  // than typed by the owner), so picking a category doesn't clobber a
+  // manual edit — only ever overwrites its own previous suggestion.
+  String? _autoFilledUnit;
   bool _isAvailable = true;
   XFile? _pickedImage;
   bool _isSubmitting = false;
@@ -50,8 +68,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameTeController = TextEditingController(text: product?.nameTe ?? '');
     _priceController = TextEditingController(text: product != null ? '${product.price}' : '');
     _descriptionController = TextEditingController(text: product?.description ?? '');
+    _unitController = TextEditingController(text: product?.unit ?? 'pc');
     _categoryId = product?.categoryId;
-    _unit = product?.unit ?? 'pc';
     _isAvailable = product?.isAvailable ?? true;
   }
 
@@ -61,7 +79,31 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameTeController.dispose();
     _priceController.dispose();
     _descriptionController.dispose();
+    _unitController.dispose();
     super.dispose();
+  }
+
+  /// Applies the category->default-unit mapping, but only for a brand-new
+  /// product whose Unit field is empty or still holds our own last
+  /// suggestion — never overwrites something the owner typed themselves.
+  void _applyCategoryDefaultUnit(int categoryId, List<Category> categories) {
+    if (_isEditing) return;
+    Category? category;
+    for (final c in categories) {
+      if (c.id == categoryId) {
+        category = c;
+        break;
+      }
+    }
+    if (category == null) return;
+    final suggested = _categoryDefaultUnit[category.name];
+    if (suggested == null) return;
+    if (_unitController.text.isEmpty || _unitController.text == _autoFilledUnit) {
+      setState(() {
+        _unitController.text = suggested;
+        _autoFilledUnit = suggested;
+      });
+    }
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -122,7 +164,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           nameTe: _nameTeController.text.trim(),
           categoryId: _categoryId,
           price: price,
-          unit: _unit,
+          unit: _unitController.text.trim(),
           description: _descriptionController.text.trim(),
           isAvailable: _isAvailable,
           image: _pickedImage,
@@ -133,7 +175,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           nameTe: _nameTeController.text.trim().isEmpty ? null : _nameTeController.text.trim(),
           categoryId: _categoryId!,
           price: price,
-          unit: _unit,
+          unit: _unitController.text.trim(),
           description: _descriptionController.text.trim(),
           isAvailable: _isAvailable,
           image: _pickedImage,
@@ -172,11 +214,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     width: 130,
                     height: 130,
                     decoration: BoxDecoration(
-                      color: AppColors.divider,
+                      color: Colors.white,
+                      border: Border.all(color: AppColors.divider),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: _buildImagePreview(existingImageUrl),
+                    child: Center(
+                      child: FractionallySizedBox(
+                        widthFactor: 0.72,
+                        heightFactor: 0.72,
+                        child: _buildImagePreview(existingImageUrl),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -216,7 +265,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 items: categories
                     .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                     .toList(),
-                onChanged: (value) => setState(() => _categoryId = value),
+                onChanged: (value) {
+                  setState(() => _categoryId = value);
+                  if (value != null) _applyCategoryDefaultUnit(value, categories);
+                },
                 validator: (value) => value == null ? 'Please select a category' : null,
               ),
               const SizedBox(height: 16),
@@ -241,16 +293,39 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     flex: 2,
-                    child: DropdownButtonFormField<String>(
-                      value: _unit,
-                      decoration: const InputDecoration(labelText: 'Unit'),
-                      items: _kUnits
-                          .map((u) => DropdownMenuItem(value: u, child: Text(u)))
-                          .toList(),
-                      onChanged: (value) => setState(() => _unit = value ?? 'pc'),
+                    child: AppTextField(
+                      label: 'Unit',
+                      controller: _unitController,
+                      hintText: 'e.g. 100 g, kg',
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: -6,
+                children: _kUnits
+                    .map(
+                      (u) => ActionChip(
+                        label: Text(u, style: const TextStyle(fontSize: 11.5)),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          setState(() {
+                            _unitController.text = u;
+                            _autoFilledUnit = null;
+                          });
+                        },
+                      ),
+                    )
+                    .toList(),
               ),
               const SizedBox(height: 16),
               AppTextField(
@@ -281,12 +356,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   Widget _buildImagePreview(String existingImageUrl) {
     if (_pickedImage != null) {
-      return Image.file(File(_pickedImage!.path), fit: BoxFit.cover);
+      return Image.file(
+        File(_pickedImage!.path),
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
+      );
     }
     if (existingImageUrl.isNotEmpty) {
       return Image.network(
         existingImageUrl,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
         errorBuilder: (context, error, stackTrace) => const Icon(
           Icons.shopping_basket_outlined,
           size: 40,

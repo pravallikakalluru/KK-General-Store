@@ -27,9 +27,9 @@ dependencies:
   # restriction, so it's used for web instead. See ApiClient.
   shared_preferences: ^2.3.2
 
-  # Images
+  # Images (product photos are shown via Flutter's built-in Image.network —
+  # see widgets/product_image.dart)
   image_picker: ^1.1.2
-  cached_network_image: ^3.3.1
 
   # PDF receipt generation + printing/sharing
   pdf: ^3.11.0

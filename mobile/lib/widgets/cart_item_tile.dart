@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/cart_item.dart';
 import '../utils/formatters.dart';
+import 'product_image.dart';
 import 'quantity_stepper.dart';
 
 /// Cart line item row with a quantity stepper and remove action.
@@ -31,27 +31,11 @@ class CartItemTile extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         child: Row(
           children: [
-            ClipRRect(
+            ProductImage(
+              imageUrl: imageUrl,
+              size: 56,
               borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 56,
-                height: 56,
-                child: imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.cover,
-                        errorWidget: (context, url, error) => Container(
-                          color: AppColors.divider,
-                          child: const Icon(Icons.shopping_basket_outlined,
-                              color: AppColors.textSecondary),
-                        ),
-                      )
-                    : Container(
-                        color: AppColors.divider,
-                        child: const Icon(Icons.shopping_basket_outlined,
-                            color: AppColors.textSecondary),
-                      ),
-              ),
+              placeholderIconSize: 24,
             ),
             const SizedBox(width: 12),
             Expanded(

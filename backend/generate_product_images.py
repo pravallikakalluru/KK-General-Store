@@ -1,42 +1,40 @@
-"""Generate a clean, illustrative icon-card image for every product that
-doesn't already have one, and set its image_url.
+"""Generate a clean icon-card image for every product that doesn't have a
+real photo, and set its image_url.
 
 These are NOT real product photography (no licensed source is available to
-fetch that automatically) - each is a colored card (by category) with a
-representative emoji and the product's English name, rendered locally with
-Pillow. The owner can replace any of these with a real photo at any time via
-the existing "Edit Product" image upload in the app - this script only fills
-in a picture for products that don't have one yet, so it never overwrites a
-real photo an owner has already uploaded.
+fetch that automatically) - each is a representative emoji centered on a
+plain white canvas, rendered locally with Pillow. This matches the same
+white-canvas, no-text, consistent-fill-fraction convention used by the real
+photos (see image_normalize.py) rather than the earlier per-category tinted
+card with a baked-in text label - the app's ProductCard already shows the
+name below the image, so a second copy of it baked into the picture was
+redundant and, being a different visual style per category, made the
+catalog look inconsistent across categories.
+
+Only touches products whose image isn't a real photo (filename doesn't end
+in "-photo.png", the marker the real-photo pipelines use) - re-running this
+regenerates every icon-card product onto the current convention without
+ever overwriting a real photo or something an owner uploaded through the
+app's image-upload flow (which always saves with a random filename, never
+the plain slugified-name one this script uses).
 """
 
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.models import Category, Product
+from app.models import Product
 
 settings = get_settings()
 
-IMAGE_SIZE = 500
-EMOJI_FONT_PATH = "C:/Windows/Fonts/seguiemj.ttf"
-NAME_FONT_PATH = "C:/Windows/Fonts/segoeuib.ttf"
+CANVAS_SIZE = 500
+TARGET_FRACTION = 0.62  # matches image_normalize.py's real-photo convention
 
-CATEGORY_COLORS: dict[str, str] = {
-    "Fruits": "#FFF3D6",
-    "Vegetables": "#E3F2E1",
-    "Temple & Pooja Needs": "#FFE8D6",
-    "Cleaning & Household": "#E1F0FA",
-    "Grains & Pulses": "#F5EBDD",
-    "Cooking Essentials": "#FFF6DA",
-    "Spices": "#FBE3E0",
-    "Instant Foods & Snacks": "#F0E6FA",
-    "Dairy & Eggs": "#FFFBEA",
-}
-DEFAULT_COLOR = "#F0F4EF"
+EMOJI_FONT_PATH = "C:/Windows/Fonts/seguiemj.ttf"
 
 # product name (must match seed.py's CATALOG exactly) -> emoji
 EMOJI_MAP: dict[str, str] = {
@@ -53,7 +51,43 @@ EMOJI_MAP: dict[str, str] = {
     "Pineapple": "\U0001F34D",
     "Sapota (Chikoo)": "\U0001F7E4",
     "Custard Apple": "\U0001F7E2",
+    "Sweet Lime (Mosambi)": "\U0001F7E2",
+    "Muskmelon": "\U0001F348",
+    "Jackfruit": "\U0001F7E1",
+    "Strawberry": "\U0001F353",
+    "Kiwi": "\U0001F95D",
+    "Dragon Fruit": "\U0001F7E3",
+    "Avocado": "\U0001F951",
+    "Pear": "\U0001F350",
+    "Peach": "\U0001F351",
+    "Plum": "\U0001F7E3",
+    "Apricot": "\U0001F7E0",
+    "Litchi": "\U0001F534",
+    "Cherry": "\U0001F352",
+    "Jamun": "\U0001F7E3",
+    "Ber": "\U0001F7E2",
+    "Amla": "\U0001F7E2",
+    "Passion Fruit": "\U0001F7E0",
+    "Rambutan": "\U0001F534",
+    "Mangosteen": "\U0001F7E3",
+    "Grapefruit": "\U0001F34A",
+    "Soursop": "\U0001F7E2",
+    "Persimmon": "\U0001F7E0",
+    "Kinnow": "\U0001F34A",
     # Vegetables
+    "Broccoli": "\U0001F966",
+    "Capsicum": "\U0001FAD1",
+    "Green Peas": "\U0001FAD9",
+    "Sweet Corn": "\U0001F33D",
+    "Baby Corn": "\U0001F33D",
+    "Cluster Beans (Guar)": "\U0001FAD8",
+    "Broad Beans (Avarakkai)": "\U0001FAD8",
+    "Cowpea (Lobia)": "\U0001FAD8",
+    "Cucumber": "\U0001F952",
+    "Gherkin": "\U0001F952",
+    "Raw Banana": "\U0001F34C",
+    "Raw Papaya": "\U0001F348",
+    "Raw Jackfruit": "\U0001F7E1",
     "Tomato": "\U0001F345",
     "Onion": "\U0001F9C5",
     "Potato": "\U0001F954",
@@ -69,9 +103,50 @@ EMOJI_MAP: dict[str, str] = {
     "Drumstick": "\U0001F33F",
     "Coriander Leaves": "\U0001F33F",
     "Curry Leaves": "\U0001F343",
+    "Spinach": "\U0001F96C",
+    "Mint Leaves": "\U0001F33F",
+    "Amaranth Leaves": "\U0001F343",
+    "Fenugreek Leaves (Methi)": "\U0001F33F",
+    "Red Amaranth": "\U0001F343",
+    "Mustard Leaves": "\U0001F96C",
+    "Drumstick Leaves": "\U0001F343",
+    "Gongura": "\U0001F343",
+    "Spring Onion": "\U0001F9C5",
+    "Lettuce": "\U0001F96C",
+    "Celery": "\U0001F33F",
     "Ginger": "\U0001FADA",
     "Garlic": "\U0001F9C4",
     "Lemon": "\U0001F34B",
+    # Root Vegetables
+    "Potato": "\U0001F954",
+    "Sweet Potato": "\U0001F360",
+    "Carrot": "\U0001F955",
+    "Beetroot": "\U0001F7E3",
+    "Radish": "\U000026AA",
+    "Turnip": "\U000026AA",
+    "Yam": "\U0001F7E4",
+    "Elephant Foot Yam (Suran)": "\U0001F7E4",
+    "Tapioca": "\U0001F7E4",
+    "Colocasia (Arbi)": "\U0001F7E4",
+    "Turmeric (Fresh)": "\U0001F7E1",
+    "Lotus Root (Stem)": "\U000026AA",
+    "Arrowroot": "\U0001F7E4",
+    # Gourds
+    "Bottle Gourd": "\U0001F952",
+    "Bitter Gourd (Karela)": "\U0001F952",
+    "Ridge Gourd": "\U0001F952",
+    "Sponge Gourd": "\U0001F952",
+    "Snake Gourd": "\U0001F952",
+    "Ash Gourd (Winter Melon)": "\U0001F348",
+    "Pointed Gourd (Parwal)": "\U0001F952",
+    "Ivy Gourd (Dondakaya)": "\U0001F952",
+    "Tinda": "\U0001F7E2",
+    "Pumpkin": "\U0001F383",
+    # Mushrooms
+    "Button Mushroom": "\U0001F344",
+    "Oyster Mushroom": "\U0001F344",
+    "Shiitake Mushroom": "\U0001F344",
+    "Milky Mushroom": "\U0001F344",
     # Temple & Pooja Needs
     "Agarbatti (Incense Sticks)": "\U0001F56F\uFE0F",
     "Camphor": "\U000026AA",
@@ -98,45 +173,117 @@ EMOJI_MAP: dict[str, str] = {
     "Naphthalene Balls": "\U000026AA",
     "Scrub Pad": "\U0001F9FD",
     "Garbage Bags": "\U0001F5D1\uFE0F",
-    # Grains & Pulses
+    # Rice
     "Rice (Sona Masoori)": "\U0001F35A",
-    "Wheat Flour (Atta)": "\U0001F33E",
+    "Basmati Rice": "\U0001F35A",
+    "Raw Rice": "\U0001F35A",
+    "Boiled Rice": "\U0001F35A",
+    "Idli Rice": "\U0001F35A",
+    "Dosa Rice": "\U0001F35A",
+    "Ponni Rice": "\U0001F35A",
+    "Brown Rice": "\U0001F35A",
+    "Black Rice": "\U0001F35A",
+    "Red Rice": "\U0001F35A",
+    "Poha (Atukulu)": "\U0001F33E",
+    # Grains & Millets
+    "Wheat": "\U0001F33E",
+    "Barley": "\U0001F33E",
+    "Maize (Corn)": "\U0001F33D",
+    "Oats": "\U0001F33E",
+    "Ragi (Finger Millet)": "\U0001F7E4",
+    "Jowar (Sorghum)": "\U0001F33E",
+    "Bajra (Pearl Millet)": "\U0001F33E",
+    "Foxtail Millet": "\U0001F7E1",
+    "Little Millet": "\U0001F7E1",
+    "Kodo Millet": "\U0001F7E4",
+    "Amaranth Grain (Rajgira)": "\U0001F7E4",
+    "Buckwheat (Kuttu)": "\U0001F7E4",
+    "Quinoa": "\U000026AA",
+    # Dals & Pulses
     "Toor Dal": "\U0001F7E1",
     "Moong Dal": "\U0001F7E2",
     "Chana Dal": "\U0001F7E4",
     "Urad Dal": "\U000026AB",
+    "Masoor Dal": "\U0001F7E0",
     "Rajma (Kidney Beans)": "\U0001F534",
     "Chickpeas (Kabuli Chana)": "\U0001F7E1",
-    "Basmati Rice": "\U0001F35A",
-    "Sooji (Rava)": "\U0001F33E",
-    "Poha (Atukulu)": "\U0001F33E",
+    "Kala Chana": "\U000026AB",
     "Green Gram Whole": "\U0001F7E2",
-    # Cooking Essentials
-    "Sunflower Oil": "\U0001F33B",
-    "Groundnut Oil": "\U0001F95C",
-    "Ghee": "\U0001F9C8",
-    "Salt": "\U0001F9C2",
-    "Sugar": "\U00002B1C",
-    "Jaggery": "\U0001F7E4",
+    "Lobia": "\U0001F7E4",
+    "Moth Dal": "\U0001F7E4",
+    "Horse Gram (Ulavalu)": "\U0001F7E4",
+    "Dried Peas": "\U0001F7E2",
+    "Soybean": "\U0001FAD8",
+    # Flours
+    "Wheat Flour (Atta)": "\U0001F33E",
+    "Multigrain Atta": "\U0001F33E",
+    "Maida": "\U00002B1C",
+    "Besan": "\U0001F7E1",
+    "Sooji (Rava)": "\U0001F33E",
+    "Rice Flour": "\U00002B1C",
+    "Ragi Flour": "\U0001F7E4",
+    "Jowar Flour": "\U0001F7E1",
+    "Bajra Flour": "\U0001F7E4",
+    "Corn Flour": "\U00002B1C",
+    # Spices - Whole
+    "Cumin Seeds (Jeera)": "\U0001F7E4",
+    "Coriander Seeds": "\U0001F7E4",
+    "Black Pepper": "\U000026AB",
+    "Fennel Seeds": "\U0001F7E2",
+    "Fenugreek Seeds": "\U0001F7E1",
+    "Mustard Seeds": "\U0001F7E1",
+    "Ajwain": "\U0001F7E4",
+    "Sesame Seeds": "\U000026AA",
+    "Cloves": "\U0001F7E4",
+    "Cardamom": "\U0001F7E2",
+    "Cinnamon": "\U0001F7E4",
+    "Bay Leaf (Tej Patta)": "\U0001F343",
+    "Star Anise": "\U0001F7E4",
+    "Nutmeg (Jaiphal)": "\U0001F7E4",
+    "Dry Red Chilli": "\U0001F336\uFE0F",
     "Tamarind": "\U0001F7E4",
-    "Vinegar": "\U0001F9F4",
-    "Baking Soda": "\U00002B1C",
-    "Coconut Oil": "\U0001F965",
-    # Spices
+    # Spice Powders
     "Turmeric Powder": "\U0001F7E1",
     "Red Chilli Powder": "\U0001F336\uFE0F",
     "Coriander Powder": "\U0001F33F",
-    "Cumin Seeds (Jeera)": "\U0001F7E4",
-    "Mustard Seeds": "\U0001F7E1",
+    "Cumin Powder": "\U0001F7E4",
     "Garam Masala": "\U0001F7E0",
-    "Black Pepper": "\U000026AB",
-    "Cardamom": "\U0001F7E2",
-    "Cloves": "\U0001F7E4",
-    "Cinnamon": "\U0001F7E4",
-    "Fenugreek Seeds": "\U0001F7E1",
-    "Fennel Seeds": "\U0001F7E2",
     "Sambar Powder": "\U0001F7E0",
     "Rasam Powder": "\U0001F534",
+    "Chaat Masala": "\U0001F7E0",
+    "Biryani Masala": "\U0001F7E0",
+    "Amchur Powder": "\U0001F7E1",
+    # Oils
+    "Sunflower Oil": "\U0001F33B",
+    "Groundnut Oil": "\U0001F95C",
+    "Coconut Oil": "\U0001F965",
+    "Rice Bran Oil": "\U0001F35A",
+    "Mustard Oil": "\U0001F7E1",
+    "Soybean Oil": "\U0001FAD8",
+    "Sesame Oil": "\U000026AA",
+    "Olive Oil": "\U0001FAD2",
+    # Sugar, Salt & Sweeteners
+    "Sugar": "\U00002B1C",
+    "Brown Sugar": "\U0001F7E4",
+    "Jaggery": "\U0001F7E4",
+    "Salt": "\U0001F9C2",
+    "Rock Salt": "\U000026AA",
+    "Himalayan Pink Salt": "\U0001F9C2",
+    # Dry Fruits & Nuts
+    "Almonds": "\U0001F7E4",
+    "Cashews": "\U0001F330",
+    "Walnuts": "\U0001F7E4",
+    "Pistachios": "\U0001F7E2",
+    "Raisins": "\U0001F7E3",
+    "Dates": "\U0001F7E4",
+    "Figs": "\U0001F7E3",
+    "Dried Apricots": "\U0001F7E0",
+    "Makhana": "\U000026AA",
+    "Peanuts": "\U0001F95C",
+    # Cooking Essentials
+    "Ghee": "\U0001F9C8",
+    "Vinegar": "\U0001F9F4",
+    "Baking Soda": "\U00002B1C",
     # Instant Foods & Snacks
     "Maggi Noodles": "\U0001F35C",
     "Yippee Noodles": "\U0001F35C",
@@ -163,41 +310,118 @@ def slugify(name: str) -> str:
     return "".join(c.lower() if c.isalnum() else "-" for c in name).strip("-")
 
 
-def render_product_image(name: str, emoji: str, bg_color: str) -> Image.Image:
-    img = Image.new("RGB", (IMAGE_SIZE, IMAGE_SIZE), bg_color)
-    draw = ImageDraw.Draw(img)
+RENDER_SIZE = 700  # generous headroom - emoji glyphs often sit off-center
+# within their own font metrics (anchor="mm" centers on the font's ascent/
+# descent box, not the glyph's actual ink), so a plain centered draw can
+# come out visibly lopsided (e.g. hugging the top with empty space below).
+# Rendering onto a transparent canvas and cropping to the glyph's actual
+# alpha (ink) bounding box - not a color-difference guess against a white
+# backdrop - fixes that regardless of the glyph's own color: a
+# color-difference approach (as used for real photos, which have no alpha
+# channel to fall back on) fails for naturally pale glyphs like the milk
+# glass or garlic emoji, which are close enough to white to be
+# indistinguishable from the background and were coming out as blank
+# images. Alpha is exact for anything Pillow itself drew, so this can never
+# misdetect regardless of the emoji's own color.
 
-    emoji_font = ImageFont.truetype(EMOJI_FONT_PATH, 200)
+
+def _longest_run(counts: np.ndarray, threshold_frac: float = 0.15) -> tuple[int, int] | None:
+    """(start, end-exclusive) of the longest contiguous run of rows/columns
+    whose ink count is at least threshold_frac of the peak - i.e. the main
+    body, not a thin (or, like a leaf, briefly wider-but-still-minor)
+    appendage. A simple "trim anything below the threshold" doesn't work
+    because an appendage with any wide-ish point (a leaf, not just a thin
+    stem) can still poke above a flat threshold - it just doesn't do it
+    *contiguously* with the body, separated by a dip below threshold at the
+    narrow stem itself.
+    """
+    if counts.max() == 0:
+        return None
+    mask = counts > (counts.max() * threshold_frac)
+    padded = np.concatenate(([False], mask, [False]))
+    diffs = np.diff(padded.astype(int))
+    starts = np.where(diffs == 1)[0]
+    ends = np.where(diffs == -1)[0]
+    if len(starts) == 0:
+        return None
+    lengths = ends - starts
+    i = int(np.argmax(lengths))
+    return int(starts[i]), int(ends[i])
+
+
+def render_product_image(emoji: str, label: str = "") -> Image.Image:
+    canvas = Image.new("RGBA", (RENDER_SIZE, RENDER_SIZE), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    emoji_font = ImageFont.truetype(EMOJI_FONT_PATH, round(RENDER_SIZE * 0.6))
     draw.text(
-        (IMAGE_SIZE / 2, IMAGE_SIZE / 2 - 30),
+        (RENDER_SIZE / 2, RENDER_SIZE / 2),
         emoji,
         font=emoji_font,
         embedded_color=True,
         anchor="mm",
     )
 
-    name_font = ImageFont.truetype(NAME_FONT_PATH, 34)
-    # Wrap long names onto two lines so they don't overflow the card.
-    words = name.split(" ")
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        candidate = f"{current} {word}".strip()
-        if draw.textlength(candidate, font=name_font) > IMAGE_SIZE - 40:
-            if current:
-                lines.append(current)
-            current = word
-        else:
-            current = candidate
-    if current:
-        lines.append(current)
+    alpha = np.array(canvas.split()[-1])
+    ys, xs = np.where(alpha > 10)
+    if len(xs) == 0:
+        print(f"  WARNING {label}: emoji glyph not rendered by this font, using fallback")
+        bbox = (0, 0, RENDER_SIZE, RENDER_SIZE)
+    else:
+        bbox = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
 
-    y = IMAGE_SIZE - 60 - (len(lines) - 1) * 40
-    for line in lines:
-        draw.text((IMAGE_SIZE / 2, y), line, font=name_font, fill="#1B1B1B", anchor="mm")
-        y += 40
+    content = canvas.crop(bbox)
+    cw, ch = content.size
 
-    return img
+    # Scale to a target size for the glyph's main BODY, not its raw bounding
+    # box - some emoji have a thin appendage (a melon's curly stem, a
+    # chilli's stalk) that stretches the bounding box well past the actual
+    # fruit/vegetable shape without adding meaningful visual size. Scaling
+    # by the raw bbox's max dimension then makes that glyph's real body come
+    # out visibly smaller than a same-target-dimension glyph with no such
+    # appendage (e.g. a cucumber), which is exactly the size inconsistency
+    # this was producing. Trimming rows/columns with only sparse ink (a
+    # stem is a handful of pixels wide relative to the body) before
+    # measuring gives a "core body" dimension to scale against instead,
+    # while the stem itself still gets included when the content is pasted.
+    alpha_crop = np.array(content.split()[-1]) > 10
+    row_run = _longest_run(alpha_crop.sum(axis=1))
+    col_run = _longest_run(alpha_crop.sum(axis=0))
+    row_run = row_run or (0, ch)
+    col_run = col_run or (0, cw)
+    core_h = row_run[1] - row_run[0]
+    core_w = col_run[1] - col_run[0]
+    core_max_dim = max(core_h, core_w)
+
+    max_dim = round(CANVAS_SIZE * TARGET_FRACTION)
+    scale = max_dim / core_max_dim
+    # Cap it against the FULL bbox (stem included) so scaling up to hit the
+    # core-body target can never push the appendage itself off the canvas.
+    max_scale = (CANVAS_SIZE * 0.94) / max(cw, ch)
+    scale = min(scale, max_scale)
+    new_size = (max(1, round(cw * scale)), max(1, round(ch * scale)))
+    content_resized = content.resize(new_size, Image.LANCZOS)
+
+    # Center on the BODY's midpoint, not the full bbox's midpoint - an
+    # appendage sitting only on one side (a stem above, never below) pulls
+    # the whole bbox's geometric center away from the body's own center, so
+    # centering the full bbox leaves the actual fruit/vegetable shape
+    # sitting off-center by half the appendage's length. Every product's
+    # body then lands at a different height depending on whether (and how
+    # much of) an appendage it happens to have - exactly the "boxes don't
+    # line up" mismatch this fixes: every body now centers on the same
+    # canvas position regardless of its appendage.
+    body_center_x = (col_run[0] + col_run[1]) / 2 * scale
+    body_center_y = (row_run[0] + row_run[1]) / 2 * scale
+    paste_x = round(CANVAS_SIZE / 2 - body_center_x)
+    paste_y = round(CANVAS_SIZE / 2 - body_center_y)
+    # Clamp so the full (appendage-included) content never goes off-canvas.
+    paste_x = max(0, min(paste_x, CANVAS_SIZE - new_size[0]))
+    paste_y = max(0, min(paste_y, CANVAS_SIZE - new_size[1]))
+
+    final = Image.new("RGB", (CANVAS_SIZE, CANVAS_SIZE), "white")
+    final.paste(content_resized, (paste_x, paste_y), content_resized)
+    return final
 
 
 def run() -> None:
@@ -207,20 +431,17 @@ def run() -> None:
     db = SessionLocal()
     try:
         products = db.scalars(select(Product)).all()
-        categories = {c.id: c.name for c in db.scalars(select(Category)).all()}
 
         generated = 0
         skipped = 0
         for product in products:
-            if product.image_url:
+            if product.image_url and "-photo.png" in product.image_url:
                 skipped += 1
                 continue
 
-            category_name = categories.get(product.category_id, "")
-            bg_color = CATEGORY_COLORS.get(category_name, DEFAULT_COLOR)
             emoji = EMOJI_MAP.get(product.name, DEFAULT_EMOJI)
 
-            img = render_product_image(product.name, emoji, bg_color)
+            img = render_product_image(emoji, product.name)
             filename = f"{slugify(product.name)}.png"
             img.save(products_dir / filename)
 
@@ -228,7 +449,7 @@ def run() -> None:
             generated += 1
 
         db.commit()
-        print(f"Generated {generated} product images, skipped {skipped} that already had one.")
+        print(f"Generated {generated} product images (consistent white-canvas style), skipped {skipped} real photos.")
     finally:
         db.close()
 

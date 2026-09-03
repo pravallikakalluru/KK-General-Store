@@ -16,12 +16,19 @@ class ApiConfig {
   /// Host:port for everything except web (Android emulator alias by default).
   static const String _devHost = '10.0.2.2:8000';
 
-  /// LAN IP:port of the backend host machine — used for the web build so
-  /// other devices on the same Wi-Fi can load the app (opening it via
-  /// http://<lan-ip>:5000) and still reach the backend, since "localhost"
-  /// from their browser would otherwise resolve to their own device.
-  /// Works fine for the host machine's own browser too.
-  static const String _webHost = '192.168.1.7:8000';
+  /// Backend port, reused with whatever host the web app itself was loaded
+  /// from (see [_webHost]).
+  static const String _backendPort = '8000';
+
+  /// On web, derives the backend host from the page's OWN address
+  /// (Uri.base.host — works in a browser without any web-only import)
+  /// instead of a hardcoded IP: whether this was opened as
+  /// http://localhost:5000 or http://<whatever-the-LAN-IP-currently-is>:5000,
+  /// API calls automatically go to that same host on the backend's port.
+  /// A hardcoded LAN IP breaks the moment DHCP hands this machine a
+  /// different address (which is exactly what happened once already) —
+  /// this has no such expiry date.
+  static String get _webHost => '${Uri.base.host}:$_backendPort';
 
   /// Base URL for all API calls, matching API_CONTRACT.md:
   /// Base URL (dev): http://<host>:8000/api/v1
@@ -37,7 +44,8 @@ class ApiConfig {
 
   /// Resolves a possibly-relative image URL (e.g. "/static/products/x.jpg")
   /// returned by the backend into an absolute URL usable by
-  /// cached_network_image. Already-absolute URLs are returned unchanged.
+  /// Image.network (see widgets/product_image.dart). Already-absolute URLs
+  /// are returned unchanged.
   static String resolveImageUrl(String? imageUrl) {
     if (imageUrl == null || imageUrl.isEmpty) return '';
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {

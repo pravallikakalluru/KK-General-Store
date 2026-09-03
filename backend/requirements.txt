@@ -11,5 +11,8 @@ bcrypt==4.0.1
 python-multipart==0.0.20
 python-dotenv==1.0.1
 
-# Only used by generate_product_images.py (one-off placeholder image generator)
+# Only used by the one-off product-image scripts (generate_product_images.py,
+# apply_fruit_photos.py, apply_individual_fruit_photos.py, image_normalize.py)
 Pillow==12.3.0
+scipy==1.18.1
+numpy==2.5.2

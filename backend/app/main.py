@@ -24,7 +24,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
+class RevalidatingStaticFiles(StaticFiles):
+    """Product photos get overwritten in place at the same URL whenever an
+    owner re-uploads one or a catalog image is regenerated. Browsers
+    heuristically cache static files for a long time from just a
+    Last-Modified header (no Cache-Control), so a tab that already loaded a
+    product once can keep showing the old bytes for that URL indefinitely
+    even after the file on disk changes. Cache-Control: no-cache forces a
+    conditional GET (If-Modified-Since) on every load instead of trusting
+    that heuristic — cheap (a 304 when the file hasn't changed) and
+    guarantees a changed file is never stuck stale in the browser cache.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", RevalidatingStaticFiles(directory=settings.static_dir), name="static")
 
 api_prefix = "/api/v1"
 app.include_router(auth.router, prefix=api_prefix)

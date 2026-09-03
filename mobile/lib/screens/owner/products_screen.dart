@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +10,7 @@ import '../../utils/error_handler.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/product_image.dart';
 import 'product_form_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -120,27 +120,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 final imageUrl = ApiConfig.resolveImageUrl(product.imageUrl);
 
                 return Card(
+                  key: ValueKey(product.id),
                   child: ListTile(
                     onTap: () => _openForm(product: product),
-                    leading: ClipRRect(
+                    leading: ProductImage(
+                      imageUrl: imageUrl,
+                      size: 48,
                       borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: imageUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                fit: BoxFit.cover,
-                                errorWidget: (context, url, error) => Container(
-                                  color: AppColors.divider,
-                                  child: const Icon(Icons.shopping_basket_outlined, size: 20),
-                                ),
-                              )
-                            : Container(
-                                color: AppColors.divider,
-                                child: const Icon(Icons.shopping_basket_outlined, size: 20),
-                              ),
-                      ),
+                      placeholderIconSize: 20,
                     ),
                     title: Text(
                       product.nameTe != null && product.nameTe!.isNotEmpty

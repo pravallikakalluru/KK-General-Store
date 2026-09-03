@@ -4,6 +4,7 @@ class OrderItem {
   final int productId;
   final String productName;
   final double productPrice;
+  final String unit;
   final int quantity;
   final double lineTotal;
 
@@ -13,6 +14,7 @@ class OrderItem {
     required this.productId,
     required this.productName,
     required this.productPrice,
+    this.unit = 'pc',
     required this.quantity,
     required this.lineTotal,
   });
@@ -24,6 +26,7 @@ class OrderItem {
       productId: json['product_id'] as int,
       productName: json['product_name'] as String? ?? '',
       productPrice: _num(json['product_price']),
+      unit: json['unit'] as String? ?? 'pc',
       quantity: json['quantity'] as int,
       lineTotal: _num(json['line_total']),
     );
@@ -42,6 +45,7 @@ class OrderItem {
       'product_id': productId,
       'product_name': productName,
       'product_price': productPrice,
+      'unit': unit,
       'quantity': quantity,
       'line_total': lineTotal,
     };

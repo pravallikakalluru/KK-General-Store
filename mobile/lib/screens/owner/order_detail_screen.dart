@@ -212,7 +212,7 @@ class _OwnerOrderDetailScreenState extends State<OwnerOrderDetailScreen> {
                                               Text(item.productName,
                                                   style: const TextStyle(fontWeight: FontWeight.w600)),
                                               Text(
-                                                '${Formatters.currency(item.productPrice)} x ${item.quantity}',
+                                                '${item.unit} x ${item.quantity}  ·  ${Formatters.currency(item.productPrice)} each',
                                                 style: const TextStyle(
                                                     fontSize: 12, color: AppColors.textSecondary),
                                               ),

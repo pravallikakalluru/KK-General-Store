@@ -159,6 +159,7 @@ class OrderItemOut(BaseModel):
     product_id: int
     product_name: str
     product_price: float
+    unit: str
     quantity: int
     line_total: float
 
