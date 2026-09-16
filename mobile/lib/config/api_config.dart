@@ -30,14 +30,22 @@ class ApiConfig {
   /// this has no such expiry date.
   static String get _webHost => '${Uri.base.host}:$_backendPort';
 
+  /// Matches the page's OWN scheme rather than hardcoding http:// — when
+  /// the app is served over HTTPS (needed for real native file-sharing to
+  /// WhatsApp: browsers only allow navigator.share() with files in a
+  /// "secure context", which plain HTTP never satisfies), API calls must
+  /// also go out over HTTPS or the browser blocks them as mixed content.
+  static String get _webScheme => Uri.base.scheme.isEmpty ? 'http' : Uri.base.scheme;
+
   /// Base URL for all API calls, matching API_CONTRACT.md:
   /// Base URL (dev): http://<host>:8000/api/v1
   static String get baseUrl =>
-      kIsWeb ? 'http://$_webHost/api/v1' : 'http://$_devHost/api/v1';
+      kIsWeb ? '$_webScheme://$_webHost/api/v1' : 'http://$_devHost/api/v1';
 
   /// Host root (no /api/v1 suffix) — used to resolve relative image URLs
   /// such as `/static/products/<filename>` returned by the backend.
-  static String get hostRoot => kIsWeb ? 'http://$_webHost' : 'http://$_devHost';
+  static String get hostRoot =>
+      kIsWeb ? '$_webScheme://$_webHost' : 'http://$_devHost';
 
   static const Duration connectTimeout = Duration(seconds: 15);
   static const Duration receiveTimeout = Duration(seconds: 20);

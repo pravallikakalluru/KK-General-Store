@@ -6,7 +6,6 @@ import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../services/whatsapp_service.dart';
 import '../../utils/error_handler.dart';
-import '../../utils/formatters.dart';
 import '../../widgets/primary_button.dart';
 import 'order_confirmation_screen.dart';
 
@@ -99,8 +98,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               ),
                             ),
                             Text(
-                              Formatters.currency(item.lineTotal),
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                              '/ ${item.product.unit}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -110,9 +113,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text('Total items', style: TextStyle(fontWeight: FontWeight.bold)),
                         Text(
-                          Formatters.currency(cart.subtotal),
+                          '${cart.itemCount}',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 17,

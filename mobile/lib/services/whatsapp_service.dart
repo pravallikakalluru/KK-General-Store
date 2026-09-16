@@ -12,4 +12,14 @@ class WhatsappService {
     if (!canLaunch) return false;
     return launchUrl(uri, mode: LaunchMode.externalApplication);
   }
+
+  /// Opens WhatsApp straight to its contact picker (no phone number, unlike
+  /// [openWhatsappUrl]'s store-notification link) with [text] pre-filled -
+  /// used as the fallback when the native file-share sheet isn't supported
+  /// on this browser/platform, so the customer can pick any contact and
+  /// attach the just-downloaded receipt by hand.
+  Future<bool> openContactPicker(String text) {
+    final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+    return launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 }

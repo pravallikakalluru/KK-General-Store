@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../config/theme.dart';
 import '../../providers/cart_provider.dart';
-import '../../utils/formatters.dart';
 import '../../widgets/cart_item_tile.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/primary_button.dart';
@@ -86,9 +85,9 @@ class CartScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Subtotal', style: TextStyle(color: AppColors.textSecondary)),
+                const Text('Items in cart', style: TextStyle(color: AppColors.textSecondary)),
                 Text(
-                  Formatters.currency(cart.subtotal),
+                  '${cart.itemCount}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                 ),
               ],

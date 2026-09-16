@@ -6,7 +6,6 @@ import '../../config/theme.dart';
 import '../../models/product.dart';
 import '../../providers/cart_provider.dart';
 import '../../utils/error_handler.dart';
-import '../../utils/formatters.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/product_image.dart';
 import '../../widgets/quantity_stepper.dart';
@@ -135,27 +134,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          Formatters.currency(product.price),
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '/ ${product.unit}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Sold per ${product.unit}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
                     ),
                     if (alreadyInCart > 0) ...[
                       const SizedBox(height: 10),

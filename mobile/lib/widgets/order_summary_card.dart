@@ -11,10 +11,17 @@ class OrderSummaryCard extends StatelessWidget {
     super.key,
     required this.order,
     required this.onTap,
+    this.showPrice = true,
   });
 
   final Order order;
   final VoidCallback onTap;
+
+  /// Owner order lists still need the total for fulfillment/accounting;
+  /// customers no longer see any pricing anywhere in the app (matches the
+  /// receipt, which dropped per-item prices and totals earlier), so their
+  /// order history hides it here too.
+  final bool showPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -59,14 +66,15 @@ class OrderSummaryCard extends StatelessWidget {
                     '$itemCount item${itemCount == 1 ? '' : 's'}',
                     style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                   ),
-                  Text(
-                    Formatters.currency(order.totalAmount),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: AppColors.primary,
+                  if (showPrice)
+                    Text(
+                      Formatters.currency(order.totalAmount),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: AppColors.primary,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ],

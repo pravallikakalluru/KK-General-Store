@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/cart_item.dart';
-import '../utils/formatters.dart';
 import 'product_image.dart';
 import 'quantity_stepper.dart';
 
@@ -57,17 +56,8 @@ class CartItemTile extends StatelessWidget {
                     ),
                   const SizedBox(height: 2),
                   Text(
-                    '${Formatters.currency(item.product.price)} / ${item.product.unit}',
+                    '/ ${item.product.unit}',
                     style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    Formatters.currency(item.lineTotal),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                      fontSize: 13,
-                    ),
                   ),
                 ],
               ),

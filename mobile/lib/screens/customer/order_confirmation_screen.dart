@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/order.dart';
 import '../../services/receipt_pdf_service.dart';
+import '../../services/whatsapp_service.dart';
 import '../../utils/error_handler.dart';
-import '../../utils/formatters.dart';
+import '../../utils/receipt_share_helper.dart';
 import '../../widgets/order_status_badge.dart';
 import '../../widgets/primary_button.dart';
 import 'customer_shell.dart';
@@ -19,22 +20,53 @@ class OrderConfirmationScreen extends StatefulWidget {
 }
 
 class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
-  bool _isSharingReceipt = false;
+  final _whatsappService = WhatsappService();
+  bool _isDownloading = false;
+  bool _isSharingToWhatsapp = false;
 
-  Future<void> _shareReceipt() async {
-    setState(() => _isSharingReceipt = true);
+  Future<void> _downloadReceipt() async {
+    setState(() => _isDownloading = true);
     try {
       await ReceiptPdfService.shareReceipt(widget.order);
     } catch (e) {
       if (mounted) ErrorHandler.showError(context, e);
     } finally {
-      if (mounted) setState(() => _isSharingReceipt = false);
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  Future<void> _shareReceiptToWhatsapp() async {
+    setState(() => _isSharingToWhatsapp = true);
+    try {
+      // Try real native file sharing first (navigator.share on web) - when
+      // it's supported, WhatsApp shows up in the OS share sheet with the
+      // PDF itself, not just text. Only when this browser/platform can't
+      // do that at all do we fall back to downloading the file and
+      // walking the customer through attaching it by hand.
+      final shared = await ReceiptPdfService.shareReceiptViaWhatsapp(widget.order);
+      if (!mounted) return;
+      if (!shared) {
+        await ReceiptPdfService.shareReceipt(widget.order);
+        if (!mounted) return;
+        setState(() => _isSharingToWhatsapp = false);
+        await shareReceiptToWhatsappContact(
+          context: context,
+          orderNumber: widget.order.orderNumber,
+          whatsappService: _whatsappService,
+        );
+        return;
+      }
+    } catch (e) {
+      if (mounted) ErrorHandler.showError(context, e);
+    } finally {
+      if (mounted) setState(() => _isSharingToWhatsapp = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
+    final itemCount = order.items.fold<int>(0, (sum, i) => sum + i.quantity);
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -73,9 +105,9 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Amount', style: TextStyle(color: AppColors.textSecondary)),
+                      const Text('Items Ordered', style: TextStyle(color: AppColors.textSecondary)),
                       Text(
-                        Formatters.currency(order.totalAmount),
+                        '$itemCount',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
@@ -97,16 +129,16 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                 label: 'Download Receipt',
                 icon: Icons.download_outlined,
                 outlined: true,
-                isLoading: _isSharingReceipt,
-                onPressed: _shareReceipt,
+                isLoading: _isDownloading,
+                onPressed: _downloadReceipt,
               ),
               const SizedBox(height: 12),
               PrimaryButton(
                 label: 'Share via WhatsApp',
                 icon: Icons.chat_bubble_outline,
                 outlined: true,
-                isLoading: _isSharingReceipt,
-                onPressed: _shareReceipt,
+                isLoading: _isSharingToWhatsapp,
+                onPressed: _shareReceiptToWhatsapp,
               ),
               const SizedBox(height: 6),
               const Text(

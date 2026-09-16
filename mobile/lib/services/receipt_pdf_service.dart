@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/order.dart';
 
@@ -281,5 +282,49 @@ class ReceiptPdfService {
       bytes: bytes,
       filename: 'Receipt-${order.orderNumber}.pdf',
     );
+  }
+
+  /// Customer action: attempts to hand the receipt PDF to the OS/browser's
+  /// real native share sheet (`navigator.share` on web) so WhatsApp can
+  /// receive the FILE ITSELF, not just pre-filled text - this is what
+  /// [shareReceipt] above does NOT do: the `printing` package's web
+  /// implementation always just downloads the PDF, it never even attempts
+  /// native sharing, which is why "Share via WhatsApp" wasn't actually
+  /// sharing anything.
+  ///
+  /// Returns true when the native share sheet was genuinely offered to the
+  /// user (whatsapp shows up there when installed/registered as a share
+  /// target - a phone with the app, or Windows/macOS with WhatsApp Desktop
+  /// installed) - false when this browser/platform doesn't support sharing
+  /// files that way at all, so the caller can fall back to a manual
+  /// download-then-attach flow. `downloadFallbackEnabled`/
+  /// `mailToFallbackEnabled` are turned off specifically so an unsupported
+  /// browser throws here instead of silently downloading - the only
+  /// reliable way to distinguish "real share happened" from "nothing did".
+  static Future<bool> shareReceiptViaWhatsapp(
+    Order order, {
+    String storeName = 'KK General Store',
+    String? storeAddress,
+  }) async {
+    final doc = await buildReceipt(
+      order,
+      storeName: storeName,
+      storeAddress: storeAddress,
+    );
+    final bytes = await doc.save();
+    final filename = 'Receipt-${order.orderNumber}.pdf';
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile.fromData(bytes, name: filename, mimeType: 'application/pdf')],
+          text: 'Receipt for order ${order.orderNumber} from $storeName',
+          downloadFallbackEnabled: false,
+          mailToFallbackEnabled: false,
+        ),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

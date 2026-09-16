@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../models/product.dart';
-import '../utils/formatters.dart';
 import 'product_image.dart';
 
 /// Product grid tile, Blinkit-style: a square product image with a floating
@@ -158,14 +157,6 @@ class ProductCard extends StatelessWidget {
                               fontSize: 10.5, color: AppColors.textSecondary),
                         )
                       : null,
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  Formatters.currency(product.price),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: AppColors.primary),
                 ),
               ],
             ),

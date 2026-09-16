@@ -5,8 +5,10 @@ import '../../config/theme.dart';
 import '../../models/order.dart';
 import '../../providers/order_provider.dart';
 import '../../services/receipt_pdf_service.dart';
+import '../../services/whatsapp_service.dart';
 import '../../utils/error_handler.dart';
 import '../../utils/formatters.dart';
+import '../../utils/receipt_share_helper.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/order_status_badge.dart';
 import '../../widgets/primary_button.dart';
@@ -22,9 +24,11 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  final _whatsappService = WhatsappService();
   Order? _order;
   bool _isLoading = true;
-  bool _isSharingReceipt = false;
+  bool _isDownloading = false;
+  bool _isSharingToWhatsapp = false;
 
   @override
   void initState() {
@@ -44,16 +48,46 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
-  Future<void> _shareReceipt() async {
+  Future<void> _downloadReceipt() async {
     final order = _order;
     if (order == null) return;
-    setState(() => _isSharingReceipt = true);
+    setState(() => _isDownloading = true);
     try {
       await ReceiptPdfService.shareReceipt(order);
     } catch (e) {
       if (mounted) ErrorHandler.showError(context, e);
     } finally {
-      if (mounted) setState(() => _isSharingReceipt = false);
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  Future<void> _shareReceiptToWhatsapp() async {
+    final order = _order;
+    if (order == null) return;
+    setState(() => _isSharingToWhatsapp = true);
+    try {
+      // Try real native file sharing first (navigator.share on web) - when
+      // it's supported, WhatsApp shows up in the OS share sheet with the
+      // PDF itself, not just text. Only when this browser/platform can't
+      // do that at all do we fall back to downloading the file and
+      // walking the customer through attaching it by hand.
+      final shared = await ReceiptPdfService.shareReceiptViaWhatsapp(order);
+      if (!mounted) return;
+      if (!shared) {
+        await ReceiptPdfService.shareReceipt(order);
+        if (!mounted) return;
+        setState(() => _isSharingToWhatsapp = false);
+        await shareReceiptToWhatsappContact(
+          context: context,
+          orderNumber: order.orderNumber,
+          whatsappService: _whatsappService,
+        );
+        return;
+      }
+    } catch (e) {
+      if (mounted) ErrorHandler.showError(context, e);
+    } finally {
+      if (mounted) setState(() => _isSharingToWhatsapp = false);
     }
   }
 
@@ -103,22 +137,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     child: Row(
                                       children: [
                                         Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(item.productName,
-                                                  style: const TextStyle(fontWeight: FontWeight.w600)),
-                                              Text(
-                                                '${item.unit} x ${item.quantity}  ·  ${Formatters.currency(item.productPrice)} each',
-                                                style: const TextStyle(
-                                                    fontSize: 12, color: AppColors.textSecondary),
-                                              ),
-                                            ],
-                                          ),
+                                          child: Text(item.productName,
+                                              style: const TextStyle(fontWeight: FontWeight.w600)),
                                         ),
                                         Text(
-                                          Formatters.currency(item.lineTotal),
-                                          style: const TextStyle(fontWeight: FontWeight.w600),
+                                          '${item.unit} x ${item.quantity}',
+                                          style: const TextStyle(
+                                              fontSize: 12.5, color: AppColors.textSecondary),
                                         ),
                                       ],
                                     ),
@@ -128,18 +153,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('Subtotal'),
-                                    Text(Formatters.currency(order.subtotal)),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text('Total',
+                                    const Text('Total items',
                                         style: TextStyle(fontWeight: FontWeight.bold)),
                                     Text(
-                                      Formatters.currency(order.totalAmount),
+                                      '${order.items.fold<int>(0, (sum, i) => sum + i.quantity)}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.primary,
@@ -183,16 +200,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           label: 'Download Receipt',
                           icon: Icons.download_outlined,
                           outlined: true,
-                          isLoading: _isSharingReceipt,
-                          onPressed: _shareReceipt,
+                          isLoading: _isDownloading,
+                          onPressed: _downloadReceipt,
                         ),
                         const SizedBox(height: 12),
                         PrimaryButton(
                           label: 'Share via WhatsApp',
                           icon: Icons.chat_bubble_outline,
                           outlined: true,
-                          isLoading: _isSharingReceipt,
-                          onPressed: _shareReceipt,
+                          isLoading: _isSharingToWhatsapp,
+                          onPressed: _shareReceiptToWhatsapp,
                         ),
                         const SizedBox(height: 6),
                         const Text(
