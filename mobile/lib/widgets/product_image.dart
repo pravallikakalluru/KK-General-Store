@@ -35,6 +35,7 @@ class ProductImage extends StatelessWidget {
     this.borderRadius,
     this.imageScale = 0.95,
     this.placeholderIconSize = 36,
+    this.backgroundColor = Colors.white,
   });
 
   /// Already-resolved absolute image URL (see ApiConfig.resolveImageUrl).
@@ -62,10 +63,15 @@ class ProductImage extends StatelessWidget {
 
   final double placeholderIconSize;
 
+  /// Fill color behind the image. Defaults to white everywhere; a couple of
+  /// call sites pass a warm tan for a styled-table look on categories whose
+  /// photos are clean, fully-isolated cutouts (see product_card.dart).
+  final Color backgroundColor;
+
   @override
   Widget build(BuildContext context) {
     final box = Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: borderRadius),
+      decoration: BoxDecoration(color: backgroundColor, borderRadius: borderRadius),
       clipBehavior: borderRadius != null ? Clip.antiAlias : Clip.none,
       child: Center(
         child: FractionallySizedBox(

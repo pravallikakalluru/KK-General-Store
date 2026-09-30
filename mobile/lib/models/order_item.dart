@@ -3,6 +3,7 @@ class OrderItem {
   final int orderId;
   final int productId;
   final String productName;
+  final String? productNameTe;
   final double productPrice;
   final String unit;
   final int quantity;
@@ -13,6 +14,7 @@ class OrderItem {
     required this.orderId,
     required this.productId,
     required this.productName,
+    this.productNameTe,
     required this.productPrice,
     this.unit = 'pc',
     required this.quantity,
@@ -25,6 +27,7 @@ class OrderItem {
       orderId: json['order_id'] as int? ?? 0,
       productId: json['product_id'] as int,
       productName: json['product_name'] as String? ?? '',
+      productNameTe: json['product_name_te'] as String?,
       productPrice: _num(json['product_price']),
       unit: json['unit'] as String? ?? 'pc',
       quantity: json['quantity'] as int,
@@ -44,6 +47,7 @@ class OrderItem {
       'order_id': orderId,
       'product_id': productId,
       'product_name': productName,
+      'product_name_te': productNameTe,
       'product_price': productPrice,
       'unit': unit,
       'quantity': quantity,

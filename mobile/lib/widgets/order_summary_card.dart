@@ -12,6 +12,7 @@ class OrderSummaryCard extends StatelessWidget {
     required this.order,
     required this.onTap,
     this.showPrice = true,
+    this.showStatus = true,
   });
 
   final Order order;
@@ -22,6 +23,11 @@ class OrderSummaryCard extends StatelessWidget {
   /// receipt, which dropped per-item prices and totals earlier), so their
   /// order history hides it here too.
   final bool showPrice;
+
+  /// Owner order lists still need the status badge to manage fulfillment;
+  /// customers' own order history hides it here (kept simple - order
+  /// number, date, item count).
+  final bool showStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +49,7 @@ class OrderSummaryCard extends StatelessWidget {
                     order.orderNumber,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
-                  OrderStatusBadge(status: order.status),
+                  if (showStatus) OrderStatusBadge(status: order.status),
                 ],
               ),
               const SizedBox(height: 6),

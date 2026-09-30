@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 
 /// Central place to configure the backend base URL.
 ///
@@ -16,6 +16,16 @@ class ApiConfig {
   /// Host:port for everything except web (Android emulator alias by default).
   static const String _devHost = '10.0.2.2:8000';
 
+  /// REQUIRED before a Play Store release build: the real, publicly
+  /// reachable backend this app will talk to once installed on someone
+  /// else's phone, on someone else's network — 10.0.2.2 only resolves
+  /// inside the Android emulator, so it's useless here. Needs a real
+  /// domain with a real (non-self-signed) TLS certificate; Android also
+  /// blocks plain http:// by default (see android/app/src/main/res/xml/
+  /// network_security_config.xml), so this must be https://.
+  static const String _prodBaseUrl = 'https://TODO-set-real-backend-domain.example.com/api/v1';
+  static const String _prodHostRoot = 'https://TODO-set-real-backend-domain.example.com';
+
   /// Backend port, reused with whatever host the web app itself was loaded
   /// from (see [_webHost]).
   static const String _backendPort = '8000';
@@ -28,6 +38,13 @@ class ApiConfig {
   /// A hardcoded LAN IP breaks the moment DHCP hands this machine a
   /// different address (which is exactly what happened once already) —
   /// this has no such expiry date.
+  ///
+  /// This assumes the frontend and backend share one hostname, differing
+  /// only by port — true for the plain LAN setup, but NOT true once the
+  /// frontend and backend are each put behind their own tunnel/proxy (e.g.
+  /// a Cloudflare Tunnel per service), which get two entirely different
+  /// hostnames with no meaningful "backend port" on either. [_backendUrlOverride]
+  /// covers that case: if set, it's used as-is instead of this derivation.
   static String get _webHost => '${Uri.base.host}:$_backendPort';
 
   /// Matches the page's OWN scheme rather than hardcoding http:// — when
@@ -37,15 +54,34 @@ class ApiConfig {
   /// also go out over HTTPS or the browser blocks them as mixed content.
   static String get _webScheme => Uri.base.scheme.isEmpty ? 'http' : Uri.base.scheme;
 
+  /// Optional build-time override for the backend's full origin (scheme +
+  /// host, no trailing slash, no /api/v1) — e.g.
+  /// `flutter build web --dart-define=BACKEND_URL=https://my-backend.trycloudflare.com`.
+  /// Takes priority over every other rule below, on every platform. Empty
+  /// (the default) means "no override, use the normal same-host / dev-host
+  /// / prod-placeholder rules instead".
+  static const String _backendUrlOverride = String.fromEnvironment('BACKEND_URL');
+
   /// Base URL for all API calls, matching API_CONTRACT.md:
   /// Base URL (dev): http://<host>:8000/api/v1
-  static String get baseUrl =>
-      kIsWeb ? '$_webScheme://$_webHost/api/v1' : 'http://$_devHost/api/v1';
+  ///
+  /// Non-web release builds use [_prodBaseUrl] (must be set to the real
+  /// backend before shipping); non-web debug builds keep using the local
+  /// dev host (emulator alias / LAN IP) so `flutter run` still works
+  /// unchanged during development.
+  static String get baseUrl {
+    if (_backendUrlOverride.isNotEmpty) return '$_backendUrlOverride/api/v1';
+    if (kIsWeb) return '$_webScheme://$_webHost/api/v1';
+    return kDebugMode ? 'http://$_devHost/api/v1' : _prodBaseUrl;
+  }
 
   /// Host root (no /api/v1 suffix) — used to resolve relative image URLs
   /// such as `/static/products/<filename>` returned by the backend.
-  static String get hostRoot =>
-      kIsWeb ? '$_webScheme://$_webHost' : 'http://$_devHost';
+  static String get hostRoot {
+    if (_backendUrlOverride.isNotEmpty) return _backendUrlOverride;
+    if (kIsWeb) return '$_webScheme://$_webHost';
+    return kDebugMode ? 'http://$_devHost' : _prodHostRoot;
+  }
 
   static const Duration connectTimeout = Duration(seconds: 15);
   static const Duration receiveTimeout = Duration(seconds: 20);

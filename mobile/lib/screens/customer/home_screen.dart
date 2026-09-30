@@ -208,7 +208,11 @@ class _HomeScreenState extends State<HomeScreen> {
           // means more columns show naturally on a wide desktop window.
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 150,
-            childAspectRatio: 0.6,
+            // Slightly shorter than before (0.6 -> 0.57): the ADD control
+            // moved off the photo into its own row below the text, which
+            // needs a little more vertical room than the old floating
+            // overlay did.
+            childAspectRatio: 0.57,
             // A bit more breathing room than before (each card now carries
             // its own drop shadow, which needs some clearance to read as a
             // separate lifted surface rather than crowding its neighbors).

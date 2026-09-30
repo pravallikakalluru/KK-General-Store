@@ -187,6 +187,7 @@ class OrderItem(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
     product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    product_name_te: Mapped[str | None] = mapped_column(String(255), nullable=True)
     product_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     unit: Mapped[str] = mapped_column(String(20), nullable=False, default="pc")
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)

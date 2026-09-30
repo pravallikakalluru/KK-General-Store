@@ -51,6 +51,8 @@ orders
 
 order_items
   id (pk), order_id (fk), product_id (fk products), product_name (snapshot),
+  product_name_te (snapshot, nullable — Telugu name, null for orders placed
+  before this field existed or for products with no Telugu name set),
   product_price (snapshot numeric), unit (snapshot str, e.g. "kg" | "litre" |
   "dozen" | "pack" | "g" | "pc" — shown as its own column on the receipt),
   quantity (int), line_total (numeric)

@@ -30,7 +30,17 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+/build/*
+# Exception: the pre-built web output IS committed, deliberately - Render
+# (see /render.yaml at the repo root) serves it directly as a static site
+# with no Flutter SDK on the build machine, no server-side build step.
+# Rebuild + re-commit this whenever the Flutter app changes
+# (`flutter build web --release`, matching the dart-defines the deployed
+# backend URL needs - see lib/config/api_config.dart). A blanket `/build/`
+# ignore rule can't be re-included by a nested `!` pattern - excluding
+# each child of build/ individually (`/build/*`) instead is what makes
+# this exception actually take effect.
+!/build/web/
 /coverage/
 
 # Symbolication related

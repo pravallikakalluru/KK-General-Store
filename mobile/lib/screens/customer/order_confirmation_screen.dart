@@ -120,7 +120,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'We sent your order to the store via WhatsApp. You can track its status from Order History.',
+                'You can track its status from Order History.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),

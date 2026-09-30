@@ -26,12 +26,41 @@ CANVAS_SIZE = 500
 TARGET_FRACTION = 0.62  # product's largest dimension as a fraction of the canvas
 WHITE_TOLERANCE = 45  # how far from pure white still counts as "background"
 MIN_COMPONENT_FRACTION = 0.08  # keep components >= 8% of the largest one's area
+CORNER_PATCH_FRACTION = 0.04  # corner sample size, as a fraction of image width/height
 
 
-def _content_mask(img: Image.Image) -> "ndimage.numpy.ndarray":
-    bg = Image.new("RGB", img.size, "white")
+def _sample_background_color(img: Image.Image) -> tuple[int, int, int]:
+    """Median color of small patches at all four corners - used instead of
+    assuming pure white, for source photos shot on a dark wood table, grey
+    fabric, etc. rather than a studio-white backdrop (no ML background
+    removal available in this environment - see the apply_*.py scripts'
+    notes on rembg being blocked by a Windows Application Control policy).
+    """
+    import numpy as np
+
+    arr = np.array(img.convert("RGB"))
+    h, w = arr.shape[:2]
+    ph = max(1, round(h * CORNER_PATCH_FRACTION))
+    pw = max(1, round(w * CORNER_PATCH_FRACTION))
+    patches = [
+        arr[0:ph, 0:pw],
+        arr[0:ph, w - pw : w],
+        arr[h - ph : h, 0:pw],
+        arr[h - ph : h, w - pw : w],
+    ]
+    pixels = np.concatenate([p.reshape(-1, 3) for p in patches], axis=0)
+    r, g, b = np.median(pixels, axis=0)
+    return (int(r), int(g), int(b))
+
+
+def _content_mask(
+    img: Image.Image,
+    bg_color: tuple[int, int, int] = (255, 255, 255),
+    tolerance: int = WHITE_TOLERANCE,
+) -> "ndimage.numpy.ndarray":
+    bg = Image.new("RGB", img.size, bg_color)
     diff = ImageChops.difference(img, bg).convert("L")
-    binary = diff.point(lambda p: 1 if p > WHITE_TOLERANCE else 0)
+    binary = diff.point(lambda p: 1 if p > tolerance else 0)
     import numpy as np
 
     return np.array(binary)
@@ -64,12 +93,33 @@ def _combined_bbox(mask) -> tuple[int, int, int, int] | None:
     return (x_min, y_min, x_max, y_max)
 
 
-def normalize(source_img: Image.Image, label: str = "") -> Image.Image:
+def normalize(
+    source_img: Image.Image,
+    label: str = "",
+    auto_background: bool = False,
+    tolerance: int | None = None,
+) -> Image.Image:
     """Takes any RGB(A) source image and returns a normalized 500x500 RGB
     product photo: content found, small artifacts dropped, scaled to
-    TARGET_FRACTION, centered on a white square."""
+    TARGET_FRACTION, centered on a white square.
+
+    [auto_background]: when the source isn't shot on white (dark wood, grey
+    fabric, etc), pass True to sample the actual background color from the
+    image's corners instead of assuming pure white - see
+    _sample_background_color's doc comment for why this exists instead of
+    real ML background removal.
+
+    [tolerance]: defaults to WHITE_TOLERANCE, but a textured non-white
+    background (visible wood grain, fabric weave) often has more internal
+    color variation than a smooth white studio backdrop - a textured
+    background's own noise can exceed the default tolerance in scattered
+    spots, which then falsely join the product into one big "content"
+    region via connected-component adjacency. Pass a higher value for
+    those to get a tighter crop.
+    """
     img = source_img.convert("RGB")
-    mask = _content_mask(img)
+    bg_color = _sample_background_color(img) if auto_background else (255, 255, 255)
+    mask = _content_mask(img, bg_color, tolerance if tolerance is not None else WHITE_TOLERANCE)
     bbox = _combined_bbox(mask)
 
     if bbox is None:

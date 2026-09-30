@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
-import '../../services/whatsapp_service.dart';
 import '../../utils/error_handler.dart';
 import '../../widgets/primary_button.dart';
 import 'order_confirmation_screen.dart';
@@ -18,7 +17,6 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _notesController = TextEditingController();
-  final _whatsappService = WhatsappService();
   bool _isSubmitting = false;
 
   @override
@@ -41,18 +39,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       cart.clear();
 
-      // Open WhatsApp with the pre-filled message right after order creation.
-      final opened = await _whatsappService.openWhatsappUrl(result.whatsappUrl);
-
       if (!mounted) return;
 
-      if (!opened) {
-        ErrorHandler.showMessage(
-          context,
-          'Order placed! Could not open WhatsApp automatically — you can message the store from your order details.',
-        );
-      }
-
+      // WhatsApp is no longer opened automatically here - a placeholder
+      // dev/test store number would surface a confusing native WhatsApp
+      // "not on WhatsApp" error the instant an order is placed, before the
+      // customer even sees the confirmation screen. The customer can still
+      // share the receipt (see order_confirmation_screen.dart) whenever
+      // they want to.
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => OrderConfirmationScreen(order: result.order),
@@ -148,7 +142,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'After placing your order, WhatsApp will open with your order details ready to send to the store.',
+                    'After placing your order, you can notify the store via WhatsApp from the confirmation screen.',
                     style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                 ),

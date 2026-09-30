@@ -49,6 +49,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
@@ -56,3 +57,25 @@ flutter:
   assets:
     - assets/images/
     - assets/fonts/
+    - assets/icon/
+
+# Run `dart run flutter_launcher_icons` after changing assets/icon/icon.png
+# to regenerate every platform's launcher icon from this one source image.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  # Android adaptive icons (8+) mask the foreground layer into whatever
+  # shape the OEM launcher uses (circle, squircle, rounded square, ...) and
+  # only guarantee the inner ~66% "safe zone" survives that mask - passing
+  # the same full-bleed image used for the flat legacy icon would get its
+  # edges (the cart wheels, the outer rim) clipped. icon_foreground.png is
+  # the same logo scaled down with transparent padding so it sits safely
+  # inside that zone.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#FFFFFF"
+    theme_color: "#2E7D32"

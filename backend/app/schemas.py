@@ -158,6 +158,7 @@ class OrderItemOut(BaseModel):
     id: int
     product_id: int
     product_name: str
+    product_name_te: str | None = None
     product_price: float
     unit: str
     quantity: int

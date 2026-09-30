@@ -5,10 +5,16 @@ import '../config/theme.dart';
 import '../models/product.dart';
 import 'product_image.dart';
 
-/// Product grid tile, Blinkit-style: a square product image with a floating
-/// quantity control overlapping its bottom-right corner, then unit, name
-/// (English + Telugu), and price below. Out-of-stock products are shown
-/// greyed out and not addable. Designed for a 3-column grid.
+/// Product grid tile: a square product photo, name (English + Telugu)
+/// below, then a unit row with a proper ADD button (not floating on top of
+/// the photo). Out-of-stock products are shown greyed out and not
+/// addable. Designed for a 3-column grid. No price is shown — this app
+/// keeps pricing conversations on WhatsApp rather than in-app.
+///
+/// All product photos sit on plain white — an earlier attempt at a warm
+/// styled backdrop (procedurally generated, no real image-generation model
+/// available in this environment) didn't hold up next to genuine
+/// photography and was reverted.
 class ProductCard extends StatelessWidget {
   const ProductCard({
     super.key,
@@ -78,7 +84,7 @@ class ProductCard extends StatelessWidget {
                     children: [
                       Positioned.fill(
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(14),
                           child: ProductImage(
                             imageUrl: imageUrl,
                             fill: true,
@@ -105,34 +111,21 @@ class ProductCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                      if (isAvailable)
-                        Positioned(
-                          right: -4,
-                          bottom: -14,
-                          child: _buildQuantityControl(context),
-                        ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  '/ ${product.unit}',
-                  style: const TextStyle(
-                      fontSize: 10.5, color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 2),
-                // Fixed-height reservations (not just maxLines) for the name and
-                // Telugu-name rows - a name that only needs 1 line, or a product
-                // with no Telugu name at all, would otherwise leave less text
-                // below the image than a 2-line name / with-Telugu-name product
-                // in the same grid row. Since the image area above is Expanded
-                // (fills whatever's left in the card), that variable leftover
-                // text height meant the image box's actual height - and so its
+                const SizedBox(height: 10),
+                // Fixed-height reservation (not just maxLines) for the name -
+                // a name that only needs 1 line would otherwise leave less
+                // text below the image than a 2-line name in the same grid
+                // row. Since the image area above is Expanded (fills whatever
+                // space is left in the card), that variable leftover text
+                // height meant the image box's actual height - and so its
                 // bottom edge - shifted card to card instead of lining up.
                 // Reserving the same space regardless of actual content keeps
                 // every card's image box exactly the same size.
                 SizedBox(
-                  height: 30, // 2 lines at fontSize 12.5 * height 1.2
+                  height: 32, // 2 lines at fontSize 13 * height 1.2
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: Text(
@@ -141,7 +134,7 @@ class ProductCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           fontWeight: FontWeight.w600,
-                          fontSize: 12.5,
+                          fontSize: 13,
                           height: 1.2),
                     ),
                   ),
@@ -158,6 +151,24 @@ class ProductCard extends StatelessWidget {
                         )
                       : null,
                 ),
+                const SizedBox(height: 6),
+                // Unit on the left, the ADD control on the right - its own
+                // row below the text rather than floating over the photo, so
+                // the image reads as a clean, unobstructed product shot.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product.unit,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ),
+                    if (isAvailable) _buildQuantityControl(context),
+                  ],
+                ),
               ],
             ),
           ),
@@ -172,21 +183,22 @@ class ProductCard extends StatelessWidget {
         onTap: onAdd,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          width: 34,
           height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.primary),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 3,
-                  offset: const Offset(0, 1)),
-            ],
           ),
-          child: const Icon(Icons.add, color: AppColors.primary, size: 18),
+          child: const Text(
+            'ADD',
+            style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                letterSpacing: 0.3),
+          ),
         ),
       );
     }

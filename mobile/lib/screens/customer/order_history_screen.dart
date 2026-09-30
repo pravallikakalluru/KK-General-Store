@@ -65,6 +65,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 return OrderSummaryCard(
                   order: order,
                   showPrice: false,
+                  showStatus: false,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(

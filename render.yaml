@@ -1,0 +1,50 @@
+# Render Blueprint - deploys the backend (FastAPI) and the web frontend
+# (pre-built Flutter web output) as two free services from this one repo.
+# See https://render.com/docs/blueprint-spec
+#
+# The database is NOT defined here - it's hosted separately on Neon (see
+# backend/docs or ask Claude), since Render's own free Postgres expires
+# after 30 days and Neon's doesn't.
+#
+# To deploy: push this repo to GitHub, then on Render: New -> Blueprint,
+# pick the repo. Render reads this file and creates both services. You'll
+# be prompted to fill in DATABASE_URL and JWT_SECRET_KEY (marked sync:
+# false below) - never commit real secrets into this file.
+
+services:
+  - type: web
+    name: kk-general-store-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false # paste the Neon connection string here in Render's dashboard
+      - key: JWT_SECRET_KEY
+        generateValue: true # Render generates a real random secret for you
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_DAYS
+        value: "30"
+      - key: STATIC_DIR
+        value: static
+      - key: SEED_STORE_NAME
+        value: KK General Store
+      - key: SEED_STORE_CODE
+        value: ORD
+      - key: SEED_STORE_WHATSAPP_NUMBER
+        value: "919999999999"
+      - key: SEED_OWNER_PHONE
+        value: "9999999999"
+      - key: SEED_OWNER_PASSWORD
+        sync: false # set your own real owner login password here
+
+  - type: web
+    name: kk-general-store-web
+    runtime: static
+    plan: free
+    rootDir: mobile/build/web
+    buildCommand: "" # nothing to build - this is already-built static output, committed as-is
+    staticPublishPath: .

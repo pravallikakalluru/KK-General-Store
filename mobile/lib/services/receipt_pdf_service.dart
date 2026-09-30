@@ -1,17 +1,51 @@
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:intl/intl.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/painting.dart'
+    show Color, FontWeight, TextDirection, TextPainter, TextSpan, TextStyle;
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/order.dart';
+import '../models/order_item.dart';
+import '../utils/formatters.dart';
+
+/// A piece of text rasterized to a PNG via Flutter's own text-shaping
+/// engine, plus the logical (unscaled) size it should display at.
+class _RenderedText {
+  const _RenderedText(
+      {required this.bytes, required this.width, required this.height});
+
+  final Uint8List bytes;
+  final double width;
+  final double height;
+}
 
 /// Single shared receipt-PDF builder used by BOTH the customer's
 /// "download receipt" action and the owner's "print receipt" action, so
 /// the layout only lives in one place (per the architecture requirement).
 class ReceiptPdfService {
-  static final DateFormat _dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
+  static bool _receiptFontLoaded = false;
+
+  /// Registers the bundled Noto Sans as a real Flutter font family (once
+  /// per app run) so [_renderTextToImage] draws the English part of an
+  /// item name in the same typeface as the rest of the receipt, rather
+  /// than whatever Flutter's unnamed default happens to resolve to.
+  /// Telugu characters aren't in Noto Sans, so Flutter/Skia's own
+  /// font-fallback then reaches for the browser/OS's system Telugu font -
+  /// the exact same fallback mechanism that already renders Telugu
+  /// correctly everywhere on-screen in this app (product cards, etc),
+  /// without this app bundling a Telugu font itself.
+  static Future<void> _ensureReceiptFontLoaded() async {
+    if (_receiptFontLoaded) return;
+    final loader = FontLoader('ReceiptNotoSans')
+      ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+    await loader.load();
+    _receiptFontLoaded = true;
+  }
 
   /// Builds the receipt PDF document for [order]. [storeName] and
   /// [storeAddress] are optional store-branding lines shown in the header.
@@ -26,9 +60,35 @@ class ReceiptPdfService {
     // so it silently renders blank. Noto Sans covers it. Bundled as a local
     // asset (assets/fonts/) rather than fetched from Google Fonts at
     // generation time — no network dependency, no latency, works offline.
-    final regularFont = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
-    final boldFont = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'));
-    final italicFont = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'));
+    final regularFont =
+        pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+    final boldFont =
+        pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'));
+    final italicFont =
+        pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Italic.ttf'));
+
+    // Item names with a Telugu part are rendered as images (see
+    // _renderTextToImage) rather than native PDF text/fontFallback - the
+    // `pdf` package has no complex-script shaping (no GSUB/GPOS), so
+    // Telugu vowel signs and conjuncts came out visibly wrong even with
+    // fully correct Unicode text and full glyph coverage. Pre-rendered
+    // here (async, before the page's synchronous build callback needs
+    // them), keyed by display string so items sharing a name only get
+    // rasterized once.
+    final itemNameImages = <String, _RenderedText>{};
+    final itemsWithTelugu = order.items.where(
+      (item) =>
+          item.productNameTe != null && item.productNameTe!.trim().isNotEmpty,
+    );
+    if (itemsWithTelugu.isNotEmpty) {
+      await _ensureReceiptFontLoaded();
+      for (final item in itemsWithTelugu) {
+        final display = _itemDisplayName(item);
+        if (itemNameImages.containsKey(display)) continue;
+        itemNameImages[display] =
+            await _renderTextToImage(display, fontSize: 10);
+      }
+    }
 
     doc.addPage(
       pw.Page(
@@ -49,7 +109,7 @@ class ReceiptPdfService {
               pw.SizedBox(height: 12),
               _buildOrderMeta(order),
               pw.SizedBox(height: 16),
-              _buildItemsTable(order),
+              _buildItemsTable(order, itemNameImages),
               if (order.notes != null && order.notes!.trim().isNotEmpty) ...[
                 pw.SizedBox(height: 20),
                 pw.Text(
@@ -112,8 +172,7 @@ class ReceiptPdfService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             _metaRow('Order No:', order.orderNumber),
-            _metaRow('Date:', _dateFormat.format(order.orderDate)),
-            _metaRow('Status:', order.status.label),
+            _metaRow('Date:', Formatters.dateTime(order.orderDate)),
           ],
         ),
         pw.Column(
@@ -151,55 +210,163 @@ class ReceiptPdfService {
     );
   }
 
-  static pw.Widget _buildItemsTable(Order order) {
+  static const _tableColumnWidths = {
+    0: pw.FlexColumnWidth(0.6),
+    1: pw.FlexColumnWidth(3),
+    2: pw.FlexColumnWidth(1),
+    3: pw.FlexColumnWidth(1.6),
+    4: pw.FlexColumnWidth(1.6),
+  };
+
+  /// Built as a manual pw.Table (not pw.TableHelper.fromTextArray, which
+  /// only accepts plain strings) because the Item column needs to embed a
+  /// rasterized image for any name with a Telugu part - see
+  /// [_renderTextToImage]'s doc comment for why.
+  static pw.Widget _buildItemsTable(
+    Order order,
+    Map<String, _RenderedText> itemNameImages,
+  ) {
     // No pricing on this receipt by design (it's a packing/fulfillment
     // list, not a bill) — "Total" is the actual quantity ordered
     // (Qty × Measurement, e.g. 2 x 100 g = 200 g), not a money amount, so
     // there's nothing meaningful to sum across rows either.
     final headers = ['#', 'Item', 'Qty', 'Measurement', 'Total'];
-    final rows = <List<String>>[];
+    final headerAligns = [
+      pw.Alignment.centerLeft,
+      pw.Alignment.centerLeft,
+      pw.Alignment.center,
+      pw.Alignment.center,
+      pw.Alignment.centerRight,
+    ];
+
+    final rows = <pw.TableRow>[
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.green800),
+        children: [
+          for (var i = 0; i < headers.length; i++)
+            _tableCell(
+              pw.Text(
+                headers[i],
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                  color: PdfColors.white,
+                ),
+              ),
+              align: headerAligns[i],
+            ),
+        ],
+      ),
+    ];
+
     for (var i = 0; i < order.items.length; i++) {
       final item = order.items[i];
-      rows.add([
-        '${i + 1}',
-        item.productName,
-        '${item.quantity}',
-        _formatUnit(item.unit),
-        _computeTotalQuantity(item.unit, item.quantity),
-      ]);
+      final display = _itemDisplayName(item);
+      final rendered = itemNameImages[display];
+      final itemCellChild = rendered != null
+          ? pw.Image(
+              pw.MemoryImage(rendered.bytes),
+              width: rendered.width,
+              height: rendered.height,
+            )
+          : pw.Text(display, style: const pw.TextStyle(fontSize: 10));
+
+      rows.add(
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+            ),
+          ),
+          children: [
+            _tableCell(
+                pw.Text('${i + 1}', style: const pw.TextStyle(fontSize: 10))),
+            _tableCell(itemCellChild),
+            _tableCell(
+              pw.Text('${item.quantity}',
+                  style: const pw.TextStyle(fontSize: 10)),
+              align: pw.Alignment.center,
+            ),
+            _tableCell(
+              pw.Text(_formatUnit(item.unit),
+                  style: const pw.TextStyle(fontSize: 10)),
+              align: pw.Alignment.center,
+            ),
+            _tableCell(
+              pw.Text(
+                _computeTotalQuantity(item.unit, item.quantity),
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              align: pw.Alignment.centerRight,
+            ),
+          ],
+        ),
+      );
     }
 
-    return pw.TableHelper.fromTextArray(
-      headers: headers,
-      data: rows,
-      headerStyle: pw.TextStyle(
-        fontWeight: pw.FontWeight.bold,
-        fontSize: 10,
-        color: PdfColors.white,
-      ),
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.green800),
-      cellStyle: const pw.TextStyle(fontSize: 10),
-      cellAlignments: {
-        0: pw.Alignment.centerLeft,
-        1: pw.Alignment.centerLeft,
-        2: pw.Alignment.center,
-        3: pw.Alignment.center,
-        4: pw.Alignment.centerRight,
-      },
-      columnWidths: {
-        0: const pw.FlexColumnWidth(0.6),
-        1: const pw.FlexColumnWidth(3),
-        2: const pw.FlexColumnWidth(1),
-        3: const pw.FlexColumnWidth(1.6),
-        4: const pw.FlexColumnWidth(1.6),
-      },
-      cellPadding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-      border: null,
-      rowDecoration: const pw.BoxDecoration(
-        border: pw.Border(
-          bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+    return pw.Table(columnWidths: _tableColumnWidths, children: rows);
+  }
+
+  static pw.Widget _tableCell(pw.Widget child,
+      {pw.Alignment align = pw.Alignment.centerLeft}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: pw.Align(alignment: align, child: child),
+    );
+  }
+
+  /// "Tomato" + "టమాటా" -> "Tomato / టమాటా" - falls back to just the
+  /// English name when there's no Telugu name snapshotted (orders placed
+  /// before that field existed, or a product with none set).
+  static String _itemDisplayName(OrderItem item) {
+    final nameTe = item.productNameTe;
+    if (nameTe == null || nameTe.trim().isEmpty) return item.productName;
+    return '${item.productName} / $nameTe';
+  }
+
+  /// Rasterizes [text] via Flutter's own text-shaping engine - the same
+  /// one that already renders Telugu correctly everywhere else in this
+  /// app's UI (product cards, detail screens) - into a PNG, for embedding
+  /// as an image rather than native PDF text/fontFallback. Verified
+  /// directly: the `pdf` package's own renderer has no OpenType GSUB/GPOS
+  /// support, so Telugu vowel signs and conjuncts came out visibly wrong
+  /// even feeding it fully correct Unicode codepoints and a font with full
+  /// Telugu glyph coverage - a fundamental limitation of that package, not
+  /// something fixable by font choice. Rendered at [renderScale]x
+  /// resolution so it stays crisp when placed at its normal logical size
+  /// in the PDF (a receipt is often printed, not just viewed on-screen).
+  static Future<_RenderedText> _renderTextToImage(
+    String text, {
+    required double fontSize,
+    double renderScale = 3,
+  }) async {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontFamily: 'ReceiptNotoSans',
+          fontSize: fontSize,
+          fontWeight: FontWeight.normal,
+          color: const Color(0xFF000000),
         ),
       ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    canvas.scale(renderScale);
+    painter.paint(canvas, ui.Offset.zero);
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(
+      (painter.width * renderScale).ceil(),
+      (painter.height * renderScale).ceil(),
+    );
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return _RenderedText(
+      bytes: byteData!.buffer.asUint8List(),
+      width: painter.width,
+      height: painter.height,
     );
   }
 
@@ -241,8 +408,9 @@ class ReceiptPdfService {
       final suffix = match.group(2)!.trim();
       if (baseAmount != null && suffix.isNotEmpty) {
         final total = baseAmount * quantity;
-        final totalStr =
-            total == total.roundToDouble() ? total.toInt().toString() : total.toStringAsFixed(2);
+        final totalStr = total == total.roundToDouble()
+            ? total.toInt().toString()
+            : total.toStringAsFixed(2);
         return '$totalStr $suffix';
       }
     }
@@ -316,7 +484,9 @@ class ReceiptPdfService {
     try {
       await SharePlus.instance.share(
         ShareParams(
-          files: [XFile.fromData(bytes, name: filename, mimeType: 'application/pdf')],
+          files: [
+            XFile.fromData(bytes, name: filename, mimeType: 'application/pdf')
+          ],
           text: 'Receipt for order ${order.orderNumber} from $storeName',
           downloadFallbackEnabled: false,
           mailToFallbackEnabled: false,

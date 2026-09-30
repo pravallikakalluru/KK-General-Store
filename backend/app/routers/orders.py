@@ -88,6 +88,7 @@ def create_order(
             OrderItem(
                 product_id=product.id,
                 product_name=product.name,
+                product_name_te=product.name_te,
                 product_price=product.price,
                 unit=product.unit,
                 quantity=requested.quantity,

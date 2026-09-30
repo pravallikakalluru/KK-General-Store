@@ -5,3 +5,4 @@ Thumbs.db
 # Self-signed dev TLS cert (LAN-IP-specific, regenerated per machine - see
 # api_config.dart's note on why HTTPS is needed for native WhatsApp share)
 .certs/
+vegetables/
