@@ -126,6 +126,7 @@ class ProductOut(BaseModel):
     category_id: int
     name: str
     name_te: str | None
+    search_aliases: str | None
     description: str | None
     image_url: str | None
     price: float

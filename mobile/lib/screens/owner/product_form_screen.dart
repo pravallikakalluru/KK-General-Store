@@ -44,6 +44,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _nameTeController;
+  late final TextEditingController _searchAliasesController;
   late final TextEditingController _priceController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _unitController;
@@ -66,6 +67,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final product = widget.product;
     _nameController = TextEditingController(text: product?.name ?? '');
     _nameTeController = TextEditingController(text: product?.nameTe ?? '');
+    _searchAliasesController =
+        TextEditingController(text: product?.searchAliases ?? '');
     _priceController = TextEditingController(text: product != null ? '${product.price}' : '');
     _descriptionController = TextEditingController(text: product?.description ?? '');
     _unitController = TextEditingController(text: product?.unit ?? 'pc');
@@ -77,6 +80,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   void dispose() {
     _nameController.dispose();
     _nameTeController.dispose();
+    _searchAliasesController.dispose();
     _priceController.dispose();
     _descriptionController.dispose();
     _unitController.dispose();
@@ -162,6 +166,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           id: widget.product!.id,
           name: _nameController.text.trim(),
           nameTe: _nameTeController.text.trim(),
+          searchAliases: _searchAliasesController.text.trim(),
           categoryId: _categoryId,
           price: price,
           unit: _unitController.text.trim(),
@@ -173,6 +178,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         await provider.createProduct(
           name: _nameController.text.trim(),
           nameTe: _nameTeController.text.trim().isEmpty ? null : _nameTeController.text.trim(),
+          searchAliases: _searchAliasesController.text.trim().isEmpty
+              ? null
+              : _searchAliasesController.text.trim(),
           categoryId: _categoryId!,
           price: price,
           unit: _unitController.text.trim(),
@@ -257,6 +265,23 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 controller: _nameTeController,
                 prefixIcon: Icons.translate_outlined,
                 hintText: 'e.g. అరటిపండ్లు',
+              ),
+              const SizedBox(height: 16),
+              AppTextField(
+                label: 'Also search as (optional)',
+                controller: _searchAliasesController,
+                prefixIcon: Icons.search_outlined,
+                hintText: 'e.g. ragulu, raagulu, finger millet',
+                maxLines: 2,
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 4, left: 4),
+                child: Text(
+                  'Other spellings customers might type — Telugu words in '
+                  'English letters, nicknames, common misspellings. '
+                  'Separate with commas.',
+                  style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                ),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(

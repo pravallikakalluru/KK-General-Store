@@ -136,6 +136,11 @@ class Product(Base):
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     name_te: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Telugu name
+    # Comma-separated alternate search terms the owner can add from the app
+    # (transliterations, regional spellings, synonyms) - e.g. "ragi" product
+    # might have "ragulu, raagulu" here, so a customer typing that still
+    # finds it even though it matches neither `name` nor `name_te` directly.
+    search_aliases: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)

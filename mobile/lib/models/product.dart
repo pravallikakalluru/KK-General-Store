@@ -4,6 +4,7 @@ class Product {
   final int categoryId;
   final String name;
   final String? nameTe;
+  final String? searchAliases;
   final String? description;
   final String? imageUrl;
   final double price;
@@ -16,6 +17,7 @@ class Product {
     required this.categoryId,
     required this.name,
     this.nameTe,
+    this.searchAliases,
     this.description,
     this.imageUrl,
     required this.price,
@@ -30,6 +32,7 @@ class Product {
       categoryId: json['category_id'] as int,
       name: json['name'] as String,
       nameTe: json['name_te'] as String?,
+      searchAliases: json['search_aliases'] as String?,
       description: json['description'] as String?,
       imageUrl: json['image_url'] as String?,
       price: _parsePrice(json['price']),
@@ -51,6 +54,7 @@ class Product {
       'category_id': categoryId,
       'name': name,
       'name_te': nameTe,
+      'search_aliases': searchAliases,
       'description': description,
       'image_url': imageUrl,
       'price': price,
@@ -65,6 +69,7 @@ class Product {
     int? categoryId,
     String? name,
     String? nameTe,
+    String? searchAliases,
     String? description,
     String? imageUrl,
     double? price,
@@ -77,6 +82,7 @@ class Product {
       categoryId: categoryId ?? this.categoryId,
       name: name ?? this.name,
       nameTe: nameTe ?? this.nameTe,
+      searchAliases: searchAliases ?? this.searchAliases,
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
       price: price ?? this.price,

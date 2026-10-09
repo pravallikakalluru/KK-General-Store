@@ -36,6 +36,7 @@ class ProductService {
   Future<Product> createProduct({
     required String name,
     String? nameTe,
+    String? searchAliases,
     required int categoryId,
     required double price,
     String? unit,
@@ -46,6 +47,7 @@ class ProductService {
     final formData = await _buildFormData(
       name: name,
       nameTe: nameTe,
+      searchAliases: searchAliases,
       categoryId: categoryId,
       price: price,
       unit: unit,
@@ -61,6 +63,7 @@ class ProductService {
     required int id,
     String? name,
     String? nameTe,
+    String? searchAliases,
     int? categoryId,
     double? price,
     String? unit,
@@ -71,6 +74,7 @@ class ProductService {
     final formData = await _buildFormData(
       name: name,
       nameTe: nameTe,
+      searchAliases: searchAliases,
       categoryId: categoryId,
       price: price,
       unit: unit,
@@ -100,6 +104,7 @@ class ProductService {
   Future<FormData> _buildFormData({
     String? name,
     String? nameTe,
+    String? searchAliases,
     int? categoryId,
     double? price,
     String? unit,
@@ -110,6 +115,7 @@ class ProductService {
     final map = <String, dynamic>{
       if (name != null) 'name': name,
       if (nameTe != null) 'name_te': nameTe,
+      if (searchAliases != null) 'search_aliases': searchAliases,
       if (categoryId != null) 'category_id': categoryId.toString(),
       if (price != null) 'price': price.toString(),
       if (unit != null) 'unit': unit,

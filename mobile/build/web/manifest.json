@@ -1,11 +1,11 @@
 {
-    "name": "grocery_store_app",
-    "short_name": "grocery_store_app",
+    "name": "KK General Store",
+    "short_name": "KK Store",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#2E7D32",
-    "description": "A new Flutter project.",
+    "description": "Order groceries from KK General Store",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

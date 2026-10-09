@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -25,7 +25,18 @@ def list_products(
     if category_id is not None:
         stmt = stmt.where(Product.category_id == category_id)
     if search:
-        stmt = stmt.where(Product.name.ilike(f"%{search}%"))
+        # Also check the Telugu name and owner-maintained aliases (see
+        # Product.search_aliases) - not just the English name - so this
+        # stays consistent with the app's own multilingual search matching
+        # (mobile/lib/utils/search_matcher.dart) if it's ever used from here.
+        term = f"%{search}%"
+        stmt = stmt.where(
+            or_(
+                Product.name.ilike(term),
+                Product.name_te.ilike(term),
+                Product.search_aliases.ilike(term),
+            )
+        )
     if available_only:
         stmt = stmt.where(Product.is_available.is_(True))
 
@@ -45,6 +56,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)) -> Product:
 def create_product(
     name: str = Form(...),
     name_te: str | None = Form(None),
+    search_aliases: str | None = Form(None),
     category_id: int = Form(...),
     price: float = Form(...),
     unit: str = Form("pc"),
@@ -63,6 +75,7 @@ def create_product(
         category_id=category_id,
         name=name,
         name_te=name_te,
+        search_aliases=search_aliases,
         description=description,
         image_url=image_url,
         price=price,
@@ -80,6 +93,7 @@ def update_product(
     product_id: int,
     name: str | None = Form(None),
     name_te: str | None = Form(None),
+    search_aliases: str | None = Form(None),
     category_id: int | None = Form(None),
     price: float | None = Form(None),
     unit: str | None = Form(None),
@@ -97,6 +111,8 @@ def update_product(
         product.name = name
     if name_te is not None:
         product.name_te = name_te
+    if search_aliases is not None:
+        product.search_aliases = search_aliases
     if category_id is not None:
         product.category_id = category_id
     if price is not None:

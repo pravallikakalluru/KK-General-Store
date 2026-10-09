@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/product.dart';
 import '../services/product_service.dart';
+import '../utils/search_matcher.dart';
 
 class ProductProvider extends ChangeNotifier {
   ProductProvider({ProductService? service})
@@ -30,8 +31,7 @@ class ProductProvider extends ChangeNotifier {
     return _allProducts.where((p) {
       final matchesCategory =
           _selectedCategoryId == null || p.categoryId == _selectedCategoryId;
-      final matchesSearch = _searchQuery.isEmpty ||
-          p.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch = SearchMatcher.matches(p, _searchQuery);
       return matchesCategory && matchesSearch;
     }).toList();
   }
@@ -64,6 +64,7 @@ class ProductProvider extends ChangeNotifier {
   Future<void> createProduct({
     required String name,
     String? nameTe,
+    String? searchAliases,
     required int categoryId,
     required double price,
     String? unit,
@@ -74,6 +75,7 @@ class ProductProvider extends ChangeNotifier {
     final product = await _service.createProduct(
       name: name,
       nameTe: nameTe,
+      searchAliases: searchAliases,
       categoryId: categoryId,
       price: price,
       unit: unit,
@@ -89,6 +91,7 @@ class ProductProvider extends ChangeNotifier {
     required int id,
     String? name,
     String? nameTe,
+    String? searchAliases,
     int? categoryId,
     double? price,
     String? unit,
@@ -100,6 +103,7 @@ class ProductProvider extends ChangeNotifier {
       id: id,
       name: name,
       nameTe: nameTe,
+      searchAliases: searchAliases,
       categoryId: categoryId,
       price: price,
       unit: unit,

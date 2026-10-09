@@ -378,6 +378,43 @@ CATALOG: dict[str, tuple[str, list[tuple[str, str, float, str]]]] = {
     ),
 }
 
+# Initial "also search as" seed for products whose common Telugu-in-English
+# spelling (transliteration) a customer might type doesn't appear in either
+# `name` (English) or `name_te` (Telugu script) - e.g. "ragulu" matches
+# neither "Ragi (Finger Millet)" nor "రాగులు" as a plain substring. This is
+# just a starting set from known examples; going forward, owners add more
+# directly from the product edit screen in the app (search_aliases field)
+# rather than this needing another code change.
+SEARCH_ALIASES: dict[str, str] = {
+    "Ragi (Finger Millet)": "ragi, ragulu, raagulu",
+    "Tomato": "tamata",
+    "Onion": "ullipaya, ullipayalu",
+    "Potato": "bangaladumpa, bangaladumpalu",
+    "Ladies Finger (Okra)": "bendakaya, bendakayalu",
+    "Raw Banana": "aratikaya, aratikayalu",
+    "Cucumber": "dosakaya",
+    "Rice (Sona Masoori)": "biyyam",
+    "Basmati Rice": "biyyam",
+    "Raw Rice": "biyyam",
+    "Boiled Rice": "biyyam",
+    "Idli Rice": "biyyam",
+    "Dosa Rice": "biyyam",
+    "Ponni Rice": "biyyam",
+    "Brown Rice": "biyyam",
+    "Black Rice": "biyyam",
+    "Red Rice": "biyyam",
+    "Poha (Atukulu)": "biyyam",
+    "Toor Dal": "pappu",
+    "Moong Dal": "pappu",
+    "Chana Dal": "pappu",
+    "Masoor Dal": "pappu",
+    "Turmeric (Fresh)": "pasupu",
+    "Turmeric Powder": "pasupu",
+    "Turmeric Powder (Pooja)": "pasupu",
+    "Red Chilli Powder": "karam",
+    "Coconut": "kobbari kaya, kobbarikaya",
+}
+
 
 def _get_or_create_store(db) -> Store:
     store = db.scalar(select(Store).where(Store.code == settings.seed_store_code))
@@ -432,6 +469,7 @@ def _sync_catalog(db, store: Store) -> None:
             category.sort_order = sort_order
 
         for name_en, name_te, price, unit in products:
+            aliases = SEARCH_ALIASES.get(name_en)
             product = db.scalar(
                 select(Product).where(Product.store_id == store.id, Product.name == name_en)
             )
@@ -442,6 +480,7 @@ def _sync_catalog(db, store: Store) -> None:
                         category_id=category.id,
                         name=name_en,
                         name_te=name_te,
+                        search_aliases=aliases,
                         price=price,
                         unit=unit,
                         is_available=True,
@@ -453,6 +492,11 @@ def _sync_catalog(db, store: Store) -> None:
                 product.name_te = name_te
                 product.price = price
                 product.unit = unit
+                # Only seed aliases for products that don't already have
+                # some (an owner may have added their own via the app -
+                # this re-run shouldn't clobber that).
+                if aliases and not product.search_aliases:
+                    product.search_aliases = aliases
                 updated_products += 1
 
     print(

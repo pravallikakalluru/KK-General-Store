@@ -44,6 +44,17 @@ class ReceiptPdfService {
     final loader = FontLoader('ReceiptNotoSans')
       ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
     await loader.load();
+    // On Flutter Web, `FontLoader.load()` resolving doesn't reliably mean
+    // the engine's text shaper has the font (and the *system* Telugu
+    // fallback font it triggers - Noto Sans itself has no Telugu glyphs,
+    // see the class doc) actually ready for a `TextPainter.layout()` call
+    // immediately afterwards - a receipt for an order with many
+    // Telugu-named items was coming out with blank/missing item names,
+    // and this race is the most likely cause. A short yield here, before
+    // the very first use, gives the browser's font/shaping pipeline a
+    // moment to settle. Per-item fallback-to-text in _renderTextToImage's
+    // caller is the real safety net; this just makes hitting it rarer.
+    await Future.delayed(const Duration(milliseconds: 120));
     _receiptFontLoaded = true;
   }
 
@@ -85,13 +96,38 @@ class ReceiptPdfService {
       for (final item in itemsWithTelugu) {
         final display = _itemDisplayName(item);
         if (itemNameImages.containsKey(display)) continue;
-        itemNameImages[display] =
-            await _renderTextToImage(display, fontSize: 10);
+        try {
+          final rendered = await _renderTextToImage(display, fontSize: 10);
+          // A failed/raced render tends to come back as a plausible-looking
+          // image with near-zero size rather than throwing - checking for
+          // that explicitly is what actually catches it; a bare try/catch
+          // alone wouldn't, since nothing threw. Leaving it out of the map
+          // on failure means the item just falls back to plain pw.Text
+          // (English name only) in _buildItemsTable below, instead of a
+          // blank cell.
+          if (rendered.width >= 1 && rendered.height >= 1) {
+            itemNameImages[display] = rendered;
+          }
+        } catch (_) {
+          // Same fallback - one item's rendering trouble shouldn't blank
+          // out (or throw and abort) the whole receipt.
+        }
       }
     }
 
+    // pw.MultiPage (not pw.Page) - a plain pw.Page is a single fixed-size
+    // sheet with no pagination: content taller than one A4 page simply
+    // overflows past the page boundary and is never rendered (no error,
+    // no visible clipping indicator - it just silently disappears). A
+    // receipt with many line items (e.g. 20-30+ products) is routinely
+    // taller than one page once the header/meta/table-header are also
+    // accounted for, which is exactly what was producing "blank" receipts
+    // for larger orders - the items table was there in the widget tree,
+    // it just never made it onto the rendered page. MultiPage lays the
+    // same content out across as many pages as needed, and pw.Table
+    // natively knows how to split its rows across that page break.
     doc.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         theme: pw.ThemeData.withFont(
@@ -100,39 +136,36 @@ class ReceiptPdfService {
           italic: italicFont,
         ),
         build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _buildHeader(storeName, storeAddress),
-              pw.SizedBox(height: 16),
-              pw.Divider(),
-              pw.SizedBox(height: 12),
-              _buildOrderMeta(order),
-              pw.SizedBox(height: 16),
-              _buildItemsTable(order, itemNameImages),
-              if (order.notes != null && order.notes!.trim().isNotEmpty) ...[
-                pw.SizedBox(height: 20),
-                pw.Text(
-                  'Order Note:',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.SizedBox(height: 4),
-                pw.Text(order.notes!),
-              ],
-              pw.SizedBox(height: 28),
-              pw.Divider(),
-              pw.SizedBox(height: 8),
-              pw.Center(
-                child: pw.Text(
-                  'Thank you for your order!',
-                  style: pw.TextStyle(
-                    fontStyle: pw.FontStyle.italic,
-                    fontSize: 11,
-                  ),
+          return [
+            _buildHeader(storeName, storeAddress),
+            pw.SizedBox(height: 16),
+            pw.Divider(),
+            pw.SizedBox(height: 12),
+            _buildOrderMeta(order),
+            pw.SizedBox(height: 16),
+            _buildItemsTable(order, itemNameImages),
+            if (order.notes != null && order.notes!.trim().isNotEmpty) ...[
+              pw.SizedBox(height: 20),
+              pw.Text(
+                'Order Note:',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(order.notes!),
+            ],
+            pw.SizedBox(height: 28),
+            pw.Divider(),
+            pw.SizedBox(height: 8),
+            pw.Center(
+              child: pw.Text(
+                'Thank you for your order!',
+                style: pw.TextStyle(
+                  fontStyle: pw.FontStyle.italic,
+                  fontSize: 11,
                 ),
               ),
-            ],
-          );
+            ),
+          ];
         },
       ),
     );
@@ -263,13 +296,23 @@ class ReceiptPdfService {
       final item = order.items[i];
       final display = _itemDisplayName(item);
       final rendered = itemNameImages[display];
+      // Falling back to `display` as plain pw.Text when it has a Telugu
+      // part would render the raw Telugu codepoints with the `pdf`
+      // package's own (non-shaping) text layout - exactly the garbled
+      // output the image rendering exists to avoid (see the class doc).
+      // If that rendering didn't produce a usable image, falling back to
+      // the English name alone reads correctly, where "fall back to the
+      // Telugu-included string" would just trade a blank cell for a
+      // garbled one.
+      final textFallback =
+          rendered != null ? display : item.productName;
       final itemCellChild = rendered != null
           ? pw.Image(
               pw.MemoryImage(rendered.bytes),
               width: rendered.width,
               height: rendered.height,
             )
-          : pw.Text(display, style: const pw.TextStyle(fontSize: 10));
+          : pw.Text(textFallback, style: const pw.TextStyle(fontSize: 10));
 
       rows.add(
         pw.TableRow(
